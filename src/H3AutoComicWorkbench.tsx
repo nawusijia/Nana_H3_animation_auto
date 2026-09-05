@@ -619,7 +619,7 @@ export function H3AutoComicWorkbench() {
             <div className="h3aw-section-label">剧本原文</div>
             <p>{storyText || '还没有读取到 H3 项目的剧本。'}</p>
           </div>
-          <div className="h3aw-isolation-note"><span>H3 ONLY</span><p>此处只读写 H3 独立项目档案，不依赖 Nana Director Console 2.0。</p></div>
+          <div className="h3aw-isolation-note"><span>H3 ONLY</span><p>此处只读写当前 H3 独立项目档案，可单独部署运行。</p></div>
         </aside>
 
         <section className="h3aw-content">

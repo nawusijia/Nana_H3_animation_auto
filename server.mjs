@@ -3684,7 +3684,7 @@ async function handleApi(req, res, url) {
     }
     if (!plan.queue.length || plan.plan.rejections.length) throw Object.assign(new Error('H3 规划存在阻断项，不能开始自动生成。'), { status: 409 });
     // “开始生成”本身就是 GPU 使用意图：先完成 H3 唤醒/互斥切换，
-    // 成功后再把自动队列标记为 running，避免待机状态被误判为公司端故障。
+    // 成功后再把自动队列标记为 running，避免待机状态被误判为执行端故障。
     await ensureH3Gpu();
     plan.status = 'running';
     plan.stopRequested = false;

@@ -2,7 +2,7 @@
   "name": "nana-h3-animation-auto",
   "version": "0.1.0",
   "type": "module",
-  "description": "Standalone MiniMax H3 automatic animation director workbench extracted from Nana Director Console 2.0.",
+  "description": "Standalone MiniMax H3 automatic animation director workbench.",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173",
     "build": "vite build",

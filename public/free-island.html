@@ -243,7 +243,7 @@ async function checkStatus(){
   try{
     const response=await fetch('/api/status');const body=await response.json();
     if(!response.ok)throw new Error(body.error||'节点离线');
-    box.className='node-status online';box.querySelector('span').textContent=(body.gpu||'RTX 5090')+' · 已连接';
+    box.className='node-status online';box.querySelector('span').textContent=(body.gpu||'GPU')+' · 已连接';
   }catch(error){
     box.className='node-status offline';box.querySelector('span').textContent='ComfyUI 节点离线 · '+error.message;
   }
@@ -253,7 +253,7 @@ function progressPercent(job){
   if(job.status==='completed')return 100;
   return Math.max(0,Math.min(99,Number(job.progress_percent)||0));
 }
-const progressPhaseLabels={submitting:'提交准备',queued:'公司排队',starting:'启动工作流',loading:'模型加载',conditioning:'条件准备',sampling:'视频采样',sampling_first:'首轮采样',upscaling:'Latent 放大',conditioning_high:'高分辨率条件',sampling_second:'高分辨率二采',decoding:'视频解码',encoding:'成品封装',retrieving:'成品回传',completed:'已完成',failed:'失败',running:'工作流执行'};
+const progressPhaseLabels={submitting:'提交准备',queued:'ComfyUI 排队',starting:'启动工作流',loading:'模型加载',conditioning:'条件准备',sampling:'视频采样',sampling_first:'首轮采样',upscaling:'Latent 放大',conditioning_high:'高分辨率条件',sampling_second:'高分辨率二采',decoding:'视频解码',encoding:'成品封装',retrieving:'成品回传',completed:'已完成',failed:'失败',running:'工作流执行'};
 function progressPhaseLabel(job){
   const phase=job.status==='failed'?(job.failed_phase||'failed'):(job.progress_phase||job.status);
   return progressPhaseLabels[phase]||phase||'等待状态';

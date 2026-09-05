@@ -2,7 +2,7 @@
 
 娜乌斯嘉 / Nana 使用并持续迭代的 **MiniMax H3 全自动漫剧导演台** 独立开源版。
 
-这个仓库不是完整的 Nana Director Console 2.0。它只抽出了 H3 生产链：
+这是一个可独立部署的 H3 生产工作台，核心流程为：
 
 **剧本 → GLM-5.3 剧本分析 → 资产设计 → Scene → Shot → H3 Sequence → GLM Sequence Prompt → 资产门禁 → MiniMax H3 串行生成 → 自动关系帧接力 → 审片 / 批注**
 
@@ -21,7 +21,7 @@
 
 ## 当前能力
 
-- 独立 H3 项目管理，不依赖 Nana Director Console 2.0
+- 独立 H3 项目管理，可单独部署运行
 - GLM-5.3 自动提取人物、场景、道具与自然 Scene
 - GLM-5.3 自动拆原子 Shot
 - 自动把同 Scene Shot 顺序组装为 5–15 秒 H3 Sequence
@@ -241,7 +241,7 @@ npm run check
 - 关系帧
 - 上传的资产图
 - 日志
-- Nana 的家庭 / 公司网络地址与机器路径
+- 开发者的私人网络地址与机器路径
 
 ## License
 

@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MiniMax H3 · H3 GPU</title>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#f9e9e2;--panel:#fffaf0;--panel2:#fff2e5;--line:#dcc7bd;--text:#3f3328;
+  --muted:#5f5040;--pink:#f38fa2;--pink2:#e9778e;--green:#2b856d;--red:#c84d68;--gold:#c48636;
+}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 12% -8%,#fffdf8 0,transparent 38%),radial-gradient(circle at 94% 106%,#f7cfd9 0,transparent 34%),var(--bg);color:var(--text);font-family:"Microsoft YaHei UI","PingFang SC",sans-serif}
+button,input,select,textarea{font:inherit}button{cursor:pointer}
+.shell{min-height:100vh;padding:28px}.topbar{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:22px}
+.brand{display:flex;align-items:center;gap:13px}.brand-mark{display:grid;place-items:center;width:46px;height:46px;border:2px solid #fff8fb;border-radius:15px;background:linear-gradient(145deg,var(--pink),#f6b4c2);box-shadow:0 8px 20px #bb6f8030;color:#5a3341;font-weight:900}
+.brand small,.eyebrow{display:block;color:#a43f64;font-size:11px;letter-spacing:.15em;text-transform:uppercase}.brand h1{margin:4px 0 0;font-size:22px}
+.node-status{display:flex;align-items:center;gap:9px;padding:10px 14px;border:1px solid var(--line);border-radius:999px;background:#fff8f6;color:var(--muted);font-size:12px}
+.node-status i{width:9px;height:9px;border-radius:50%;background:#b59c91}.node-status.online i{background:var(--green);box-shadow:0 0 14px #71ddaf70}.node-status.offline i{background:var(--red)}
+.layout{display:grid;grid-template-columns:minmax(0,1.02fr) minmax(420px,.98fr);gap:18px}.card{border:1px solid var(--line);border-radius:18px;background:linear-gradient(160deg,#fffdf8,#fff7f3);box-shadow:0 16px 42px #8d5f6a1c;overflow:hidden}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid var(--line)}.card-head h2{margin:3px 0 0;font-size:17px}.card-body{padding:20px}
+label{display:block;margin:0 0 8px;color:#514238;font-size:12px;font-weight:700}textarea,select,input[type=file]{width:100%;border:1px solid var(--line);border-radius:12px;background:#fffdfb;color:var(--text);outline:none}
+textarea:focus,select:focus,input:focus{border-color:var(--pink);box-shadow:0 0 0 3px #f38fa225}textarea{min-height:260px;padding:14px;resize:vertical;line-height:1.65}select{height:44px;padding:0 12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px}.fixed-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}.fixed-strip span{padding:9px 8px;border:1px solid var(--line);border-radius:10px;background:#fff7f4;text-align:center;color:var(--muted);font-size:11px}.fixed-strip strong{display:block;margin-top:3px;color:#4b3c33;font-size:12px}
+.mode-picker{margin-top:16px}.mode-options{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.mode-option{position:relative;margin:0;cursor:pointer}.mode-option input{position:absolute;opacity:0;pointer-events:none}.mode-card{display:block;min-height:72px;padding:11px 12px;border:1px solid var(--line);border-radius:13px;background:#fffaf8;transition:.18s}.mode-card strong{display:block;color:#4b3c33;font-size:13px}.mode-card small{display:block;margin-top:5px;color:var(--muted);font-size:10px;line-height:1.45}.mode-option input:checked+.mode-card{border-color:var(--pink2);background:#ffe8ee;box-shadow:0 0 0 3px #f38fa21f}.mode-option input:disabled+.mode-card{cursor:not-allowed;opacity:.48}.mode-option input:checked+.mode-card strong{color:#9d365c}
+.summary{margin-top:16px;padding:13px 14px;border:1px solid #e1bbc6;border-radius:12px;background:#fff0f4}.summary-row{display:flex;justify-content:space-between;gap:10px;margin:5px 0;font-size:12px}.summary-row span{color:var(--muted)}.summary-row strong{color:#5b3543}
+.upload{margin-top:18px}.upload-drop{position:relative;padding:18px;border:1px dashed #d7a8b5;border-radius:13px;background:#fff8f6;text-align:center;color:var(--muted)}.upload-drop input{margin-top:10px;padding:9px}.upload-hint{font-size:11px;line-height:1.6}
+.refs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:12px}.ref{border:1px solid var(--line);border-radius:13px;background:#fffaf8;overflow:hidden}.ref img{display:block;width:100%;height:112px;object-fit:cover;background:#f2e7e3}.ref-info{padding:9px}.ref-name{height:30px;overflow:hidden;color:#5d4a40;font-size:11px;line-height:15px}.ref-actions{display:flex;gap:5px;margin-top:7px}.ref-actions button{flex:1;border:1px solid #d5b4bc;border-radius:7px;background:#fff0f4;color:#674452;font-size:11px}.ref-actions button:hover{border-color:var(--pink)}
+.submit{width:100%;height:48px;margin-top:18px;border:0;border-radius:13px;background:linear-gradient(135deg,var(--pink),var(--pink2));color:#2b101c;font-weight:900;box-shadow:0 12px 30px #ff71a62f}.submit:disabled{cursor:wait;filter:grayscale(.5);opacity:.55}.form-message{min-height:20px;margin-top:10px;color:var(--muted);font-size:12px}.form-message.error{color:var(--red)}.form-message.ok{color:var(--green)}
+.result-card .card-body{padding:0}.result-stage{padding:18px;border-bottom:1px solid var(--line);background:linear-gradient(145deg,#fff9f7,#fff0f4)}.result-empty{display:grid;place-items:center;min-height:270px;padding:34px;border:1px dashed #d7a8b5;border-radius:14px;background:#fffaf8;text-align:center;color:var(--muted);font-size:13px;line-height:1.7}.result-empty strong{display:block;margin-bottom:5px;color:#5b3543;font-size:15px}.result-video{display:block;width:100%;max-height:410px;aspect-ratio:16/9;border-radius:13px;background:#2c2226;object-fit:contain;box-shadow:0 12px 28px #6b3a4c25}.result-info{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-top:12px}.result-info h3{margin:0;color:#4b3039;font-size:14px}.result-path{margin-top:5px;color:var(--muted);font-size:10px;line-height:1.45;word-break:break-all}.result-actions,.job-actions{display:flex;flex-wrap:wrap;gap:7px}.action-button{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 11px;border:1px solid #d5a9b6;border-radius:9px;background:#fff7f8;color:#963b5c;font-size:11px;font-weight:700;text-decoration:none}.action-button:hover{border-color:var(--pink2);background:#ffe8ee}.queue-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px 8px;color:#5b3543;font-size:12px;font-weight:800}.jobs{display:flex;max-height:430px;flex-direction:column;gap:10px;overflow:auto;padding:0 18px 18px}.empty{padding:44px 20px;text-align:center;color:var(--muted);font-size:13px}.job{padding:13px;border:1px solid var(--line);border-radius:13px;background:#fffaf8}.job.selected{border-color:#e68aa1;box-shadow:0 0 0 3px #f38fa218}.job-top{display:flex;justify-content:space-between;gap:10px}.job-id{font-size:12px;font-weight:800}.badge{padding:4px 8px;border-radius:999px;background:#f3e3e8;color:#674452;font-size:10px}.badge.completed{background:#dff3eb;color:#276a57}.badge.failed{background:#fae2e7;color:#a53c54}.job-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}.job-meta span{padding:4px 7px;border-radius:7px;background:#f8ecef;color:#634b55;font-size:10px}.job-prompt{margin-top:9px;color:#665158;font-size:11px;line-height:1.5}.job-actions{margin-top:10px}.progress-panel{padding:12px;border:1px solid #e2b9c4;border-radius:12px;background:#fff1f5}.progress-panel.failed{border-color:#e49aab;background:#fff0f2}.active-progress{margin-bottom:14px;padding:14px}.job-progress{margin-top:10px;padding:10px}.progress-monitor-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:11px}.progress-monitor-head span{display:block;color:#a43f64;font-size:9px;font-weight:800;letter-spacing:.12em}.progress-monitor-head strong{display:block;margin-top:3px;color:#4b3039;font-size:13px}.progress-state{padding:5px 8px;border-radius:999px;background:#f6dce4;color:#8d3656;font-size:10px;white-space:nowrap}.progress-panel.failed .progress-state{background:#f7d6de;color:#a53c54}.progress-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-bottom:10px}.progress-grid div{min-width:0;padding:8px 9px;border:1px solid #ead0d7;border-radius:9px;background:#fff9fa}.progress-grid span{display:block;color:#886f78;font-size:9px}.progress-grid strong{display:block;margin-top:3px;overflow:hidden;color:#5d404a;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.progress-head{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#704654;font-size:11px}.progress-head strong{color:#a43f64;font-size:12px}.progress-track{height:8px;margin-top:8px;border-radius:999px;background:#efdde2;overflow:hidden}.progress-track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#f5a4b6,#e76e8c);box-shadow:0 0 12px #e9778e55;transition:width .35s ease}.progress-panel.failed .progress-track i{background:linear-gradient(90deg,#e59aaa,#c84d68)}.progress-detail{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;color:#8a6e78;font-size:9px}.progress-error{margin-top:10px;padding:9px 10px;border:1px solid #edbdc7;border-radius:9px;background:#fff7f8;color:#a53c54;font-size:10px;line-height:1.55}.progress-error b{display:block;margin-bottom:3px}.job-error{margin-top:8px;color:var(--red);font-size:11px}.preview-modal{position:fixed;z-index:50;inset:0;display:grid;place-items:center;padding:24px;background:#3f273080;backdrop-filter:blur(8px)}.preview-modal[hidden]{display:none}.preview-dialog{width:min(1100px,96vw);max-height:94vh;padding:17px;border:1px solid #f2c6d1;border-radius:18px;background:#fffaf8;box-shadow:0 24px 80px #25151d66}.preview-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px}.preview-bar h3{margin:0;color:#4b3039;font-size:15px}.preview-close{width:36px;height:36px;border:1px solid #d5a9b6;border-radius:50%;background:#fff0f4;color:#963b5c;font-size:20px}.preview-dialog video{display:block;width:100%;max-height:76vh;border-radius:13px;background:#21191c;object-fit:contain}.preview-footer{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-top:11px}.note{margin-top:12px;color:var(--muted);font-size:11px;line-height:1.7}
+@media(max-width:980px){.layout{grid-template-columns:1fr}.shell{padding:16px}.fixed-strip{grid-template-columns:1fr 1fr}}@media(max-width:560px){.grid3{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}.node-status{width:100%}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand"><div class="brand-mark">H3</div><div><small>H3 GPU EXECUTOR</small><h1>H3自由岛 · MiniMax H3 H3 GPU</h1></div></div>
+    <div class="node-status" id="nodeStatus"><i></i><span>正在检查ComfyUI 节点…</span></div>
+  </header>
+  <main class="layout">
+    <section class="card">
+      <div class="card-head"><div><span class="eyebrow">GENERATION INPUT</span><h2>提交视频任务</h2></div></div>
+      <div class="card-body">
+        <label for="prompt">提示词</label>
+        <textarea id="prompt" placeholder="写入完整视频提示词。可直接使用“图1、图2”，提交时会自动转换成 H3 的 Picture 标签。"></textarea>
+        <div class="mode-picker">
+          <label>工作流档位</label>
+          <div class="mode-options" role="radiogroup" aria-label="H3 工作流档位">
+            <label class="mode-option"><input type="radio" name="workflowPreset" value="standard" checked><span class="mode-card"><strong>极速文戏</strong><small>普通对白 / 低动态，最快；保留画幅与 MP 自选</small></span></label>
+            <label class="mode-option"><input type="radio" name="workflowPreset" value="best_dynamic"><span class="mode-card"><strong>动态增强·中档</strong><small>高动态 / 粒子 / 战斗；1408×768，仅 16:9</small></span></label>
+            <label class="mode-option"><input type="radio" name="workflowPreset" value="ultra_refine"><span class="mode-card"><strong>极致精修 1080P</strong><small>门面镜头 / 小脸景别；1920×1088，仅 16:9</small></span></label>
+          </div>
+        </div>
+        <div class="grid3">
+          <div><label for="aspect">画幅</label><select id="aspect">
+            <option value="16:9 (Widescreen)">16:9 横屏</option>
+            <option value="9:16 (Portrait Widescreen)">9:16 竖屏</option>
+            <option value="4:3 (Standard)">4:3 横屏</option>
+            <option value="3:4 (Portrait Standard)">3:4 竖屏</option>
+            <option value="1:1 (Square)">1:1 方形</option>
+            <option value="3:2 (Photo)">3:2 横屏</option>
+            <option value="2:3 (Portrait Photo)">2:3 竖屏</option>
+            <option value="21:9 (Ultrawide)">21:9 超宽屏</option>
+          </select></div>
+          <div><label for="seconds">秒数</label><select id="seconds"></select></div>
+          <div><label for="megapixels">极速档画质</label><select id="megapixels">
+            <option value="0.5">0.5 MP</option>
+            <option value="0.7">0.7 MP</option>
+            <option value="0.9" selected>0.9 MP</option>
+            <option value="1.0">1.0 MP</option>
+            <option value="1.1">1.1 MP（实验 / 极限）</option>
+          </select></div>
+        </div>
+        <div class="fixed-strip">
+          <span>采样<strong id="sampleValue">4 步</strong></span><span>帧率<strong>24 fps</strong></span><span>音频<strong>原生生成</strong></span>
+        </div>
+        <div class="upload">
+          <label>输入图片（0～9 张）</label>
+          <div class="upload-drop">
+            <div>添加人物、场景或风格图；上传后选择“图生视频”或“参考生视频”</div>
+            <input id="images" type="file" accept="image/*" multiple>
+            <div class="upload-hint">提示词中的图1、图2按这里的顺序对应 Picture 1、Picture 2。</div>
+          </div>
+          <div class="mode-picker">
+            <label>生成方式</label>
+            <div class="mode-options" role="radiogroup" aria-label="生成方式">
+              <label class="mode-option"><input type="radio" name="generationMode" value="text" checked><span class="mode-card"><strong>文生视频</strong><small>不上传图片时自动使用</small></span></label>
+              <label class="mode-option"><input type="radio" name="generationMode" value="image"><span class="mode-card"><strong>图生视频</strong><small>图1作为视频首帧</small></span></label>
+              <label class="mode-option"><input type="radio" name="generationMode" value="reference"><span class="mode-card"><strong>参考生视频</strong><small>全部图片只作内容参考</small></span></label>
+            </div>
+          </div>
+          <div class="refs" id="refs"></div>
+        </div>
+        <div class="summary">
+          <div class="summary-row"><span>工作流档位</span><strong id="workflowValue">极速文戏</strong></div>
+          <div class="summary-row"><span>输出规格</span><strong id="qualityValue">0.9 MP · 自选画幅</strong></div>
+          <div class="summary-row"><span>当前方式</span><strong id="modeValue">文生视频</strong></div>
+          <div class="summary-row"><span>实际长度</span><strong id="lengthValue">362 帧</strong></div>
+          <div class="summary-row"><span>图片用途</span><strong id="pictureValue">当前无图片</strong></div>
+        </div>
+        <button class="submit" id="submit">提交到 H3</button>
+        <div class="form-message" id="message"></div>
+        <div class="note">点击提交后才会真正进入ComfyUI 队列。自由岛只手动选档，不做自动路由：极速档保留画幅与 0.5 / 0.7 / 0.9 / 1.0 / 1.1 MP；动态增强与极致精修使用各自已验收的固定 16:9 工作流。</div>
+      </div>
+    </section>
+    <aside class="card result-card">
+      <div class="card-head"><div><span class="eyebrow">VIDEO RESULTS</span><h2>生成结果</h2></div><button id="refresh" style="border:1px solid var(--line);border-radius:9px;background:#fff0f4;color:#674452;padding:7px 10px">刷新</button></div>
+      <div class="card-body">
+        <div class="result-stage" id="resultStage"><div id="activeProgressSlot"></div><div id="resultContent"><div class="result-empty"><div><strong>成品会自动回到这里</strong>提交后可以离开页面，完成后会自动归档到 当前 H3 项目输出目录 并在这里播放。</div></div></div></div>
+        <div class="queue-head"><span>任务记录</span><span id="jobCount">0 条</span></div>
+        <div class="jobs" id="jobs"><div class="empty">还没有 H3 任务</div></div>
+      </div>
+    </aside>
+  </main>
+</div>
+<div class="preview-modal" id="previewModal" hidden>
+  <div class="preview-dialog" role="dialog" aria-modal="true" aria-labelledby="previewTitle">
+    <div class="preview-bar"><h3 id="previewTitle">视频预览</h3><button class="preview-close" id="previewClose" type="button" aria-label="关闭预览">×</button></div>
+    <video id="previewVideo" controls playsinline preload="metadata"></video>
+    <div class="preview-footer"><div class="result-path" id="previewMeta"></div><button class="action-button" id="previewOpenFolder" type="button">打开本地文件夹</button></div>
+  </div>
+</div>
+<script>
+const promptEl=document.getElementById('prompt');
+const aspectEl=document.getElementById('aspect');
+const secondsEl=document.getElementById('seconds');
+const megapixelsEl=document.getElementById('megapixels');
+const workflowInputs=[...document.querySelectorAll('input[name="workflowPreset"]')];
+const imagesEl=document.getElementById('images');
+const modeInputs=[...document.querySelectorAll('input[name="generationMode"]')];
+const refsEl=document.getElementById('refs');
+const submitEl=document.getElementById('submit');
+const messageEl=document.getElementById('message');
+const jobsEl=document.getElementById('jobs');
+const activeProgressSlot=document.getElementById('activeProgressSlot');
+const resultContent=document.getElementById('resultContent');
+const jobCount=document.getElementById('jobCount');
+const previewModal=document.getElementById('previewModal');
+const previewVideo=document.getElementById('previewVideo');
+const previewTitle=document.getElementById('previewTitle');
+const previewMeta=document.getElementById('previewMeta');
+const previewOpenFolder=document.getElementById('previewOpenFolder');
+const workflowValue=document.getElementById('workflowValue');
+const qualityValue=document.getElementById('qualityValue');
+const sampleValue=document.getElementById('sampleValue');
+const modeValue=document.getElementById('modeValue');
+const lengthValue=document.getElementById('lengthValue');
+const pictureValue=document.getElementById('pictureValue');
+let files=[];
+let jobsCache=[];
+let selectedJobId='';
+let latestCompletedId='';
+
+for(let value=5;value<=15;value++){
+  const option=document.createElement('option');
+  option.value=String(value);option.textContent=value+' 秒';
+  if(value===15)option.selected=true;
+  secondsEl.appendChild(option);
+}
+
+function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
+const workflowPresetLabels={standard:'极速文戏',best_dynamic:'动态增强·中档',ultra_refine:'极致精修 1080P'};
+function workflowPreset(){return workflowInputs.find(input=>input.checked)?.value||'standard'}
+function workflowSpec(preset=workflowPreset()){
+  if(preset==='best_dynamic')return {label:workflowPresetLabels[preset],quality:'1408×768 · 16:9',sample:'4+3 精修'};
+  if(preset==='ultra_refine')return {label:workflowPresetLabels[preset],quality:'1920×1088 · 16:9',sample:'9+4 精修'};
+  return {label:workflowPresetLabels.standard,quality:megapixelsEl.value+' MP · '+aspectEl.options[aspectEl.selectedIndex].text,sample:'4 步'};
+}
+function syncWorkflowAvailability(){
+  const preset=workflowPreset();
+  const locked=preset!=='standard';
+  if(locked)aspectEl.value='16:9 (Widescreen)';
+  aspectEl.disabled=locked;megapixelsEl.disabled=locked;
+}
+function generationMode(){return modeInputs.find(input=>input.checked)?.value||'text'}
+function syncModeAvailability(){
+  const text=modeInputs.find(input=>input.value==='text');
+  const image=modeInputs.find(input=>input.value==='image');
+  const reference=modeInputs.find(input=>input.value==='reference');
+  image.disabled=false;reference.disabled=false;
+  if(!files.length){text.disabled=false;return}
+  text.disabled=true;
+  if(text.checked)reference.checked=true;
+}
+function modeInfo(){
+  const selected=generationMode();
+  if(selected==='text')return ['T2VA','文生视频','text'];
+  if(selected==='image'&&files.length>1)return ['Hybrid','图生视频（图1首帧 + 其余参考）','image'];
+  if(selected==='image')return ['I2VA','图生视频','image'];
+  return ['Ref2VA','参考生视频','reference'];
+}
+function lengthFor(seconds){
+  const frames=Math.max(5,Math.round(seconds*24));
+  return frames+((5-(frames%17))%17+17)%17;
+}
+function updateSummary(){
+  syncWorkflowAvailability();
+  syncModeAvailability();
+  const [,label,selected]=modeInfo();
+  const spec=workflowSpec();
+  workflowValue.textContent=spec.label;
+  qualityValue.textContent=spec.quality;
+  sampleValue.textContent=spec.sample;
+  modeValue.textContent=label;
+  lengthValue.textContent=lengthFor(Number(secondsEl.value))+' 帧';
+  if(!files.length)pictureValue.textContent=selected==='text'?'当前无图片':'请先上传至少 1 张图片';
+  else if(selected==='image')pictureValue.textContent=files.length===1?'图1 = 视频首帧':'图1 = 视频首帧，其余 = 参考图';
+  else pictureValue.textContent='全部 '+files.length+' 张作为参考图';
+}
+function renderRefs(){
+  refsEl.innerHTML='';
+  files.forEach((file,index)=>{
+    const card=document.createElement('article');card.className='ref';
+    const image=document.createElement('img');image.src=URL.createObjectURL(file);image.alt='图'+(index+1);
+    const info=document.createElement('div');info.className='ref-info';
+    info.innerHTML='<div class="ref-name"><strong>图'+(index+1)+'</strong> · '+escapeHtml(file.name)+'</div>';
+    const actions=document.createElement('div');actions.className='ref-actions';
+    [['←',-1],['→',1]].forEach(([label,delta])=>{
+      const button=document.createElement('button');button.type='button';button.textContent=label;
+      button.disabled=(index===0&&delta<0)||(index===files.length-1&&delta>0);
+      button.onclick=()=>{const next=index+delta;[files[index],files[next]]=[files[next],files[index]];renderRefs()};
+      actions.appendChild(button);
+    });
+    const remove=document.createElement('button');remove.type='button';remove.textContent='删除';
+    remove.onclick=()=>{files.splice(index,1);renderRefs()};
+    actions.appendChild(remove);info.appendChild(actions);card.append(image,info);refsEl.appendChild(card);
+  });
+  updateSummary();
+}
+imagesEl.addEventListener('change',()=>{
+  const incoming=[...imagesEl.files];
+  const remaining=Math.max(0,9-files.length);
+  files.push(...incoming.slice(0,remaining));
+  imagesEl.value='';
+  if(incoming.length>remaining)showMessage('最多保留前 9 张图片。','error');
+  renderRefs();
+});
+[...workflowInputs,...modeInputs,secondsEl,aspectEl,megapixelsEl].forEach(el=>el.addEventListener('change',updateSummary));
+
+function showMessage(text,type=''){messageEl.textContent=text;messageEl.className='form-message '+type}
+async function checkStatus(){
+  const box=document.getElementById('nodeStatus');
+  try{
+    const response=await fetch('/api/status');const body=await response.json();
+    if(!response.ok)throw new Error(body.error||'节点离线');
+    box.className='node-status online';box.querySelector('span').textContent=(body.gpu||'RTX 5090')+' · 已连接';
+  }catch(error){
+    box.className='node-status offline';box.querySelector('span').textContent='ComfyUI 节点离线 · '+error.message;
+  }
+}
+function statusLabel(status){return {submitting:'正在提交',queued:'等待队列',running:'生成中',retrieving:'正在回传',completed:'已完成',failed:'失败'}[status]||status}
+function progressPercent(job){
+  if(job.status==='completed')return 100;
+  return Math.max(0,Math.min(99,Number(job.progress_percent)||0));
+}
+const progressPhaseLabels={submitting:'提交准备',queued:'公司排队',starting:'启动工作流',loading:'模型加载',conditioning:'条件准备',sampling:'视频采样',sampling_first:'首轮采样',upscaling:'Latent 放大',conditioning_high:'高分辨率条件',sampling_second:'高分辨率二采',decoding:'视频解码',encoding:'成品封装',retrieving:'成品回传',completed:'已完成',failed:'失败',running:'工作流执行'};
+function progressPhaseLabel(job){
+  const phase=job.status==='failed'?(job.failed_phase||'failed'):(job.progress_phase||job.status);
+  return progressPhaseLabels[phase]||phase||'等待状态';
+}
+function progressMarkup(job,className,compact=false){
+  const percent=progressPercent(job);
+  const label=job.status==='failed'?(job.failed_label||job.progress_label||statusLabel(job.status)):(job.progress_label||statusLabel(job.status));
+  const node=job.status==='failed'?(job.failed_node||job.progress_node):(job.progress_node||'');
+  const step=job.progress_max?`${job.progress_value||0}/${job.progress_max}`:'—';
+  const promptId=job.prompt_id?String(job.prompt_id).slice(0,12)+'…':'等待 prompt_id';
+  const failedClass=job.status==='failed'?' failed':'';
+  if(compact)return `<div class="progress-panel ${className}${failedClass}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><div class="progress-head"><span>${escapeHtml(label)}</span><strong>${percent}%</strong></div><div class="progress-track"><i style="width:${percent}%"></i></div><div class="progress-detail"><span>阶段 ${escapeHtml(progressPhaseLabel(job))}</span>${node?`<span>节点 #${escapeHtml(node)}</span>`:''}${job.progress_max?`<span>Step ${escapeHtml(step)}</span>`:''}</div></div>`;
+  return `<div class="progress-panel ${className}${failedClass}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}">
+    <div class="progress-monitor-head"><div><span>H3 FREE ISLAND / CURRENT TASK</span><strong>${escapeHtml(workflowLabel(job))} · ${escapeHtml(jobQualityLabel(job))}</strong></div><b class="progress-state">${escapeHtml(statusLabel(job.status))}</b></div>
+    <div class="progress-grid"><div><span>当前阶段</span><strong>${escapeHtml(progressPhaseLabel(job))}</strong></div><div><span>阶段详情</span><strong>${escapeHtml(label)}</strong></div><div><span>当前节点</span><strong>${node?'#'+escapeHtml(node):'—'}</strong></div><div><span>当前 Step</span><strong>${escapeHtml(step)}</strong></div></div>
+    <div class="progress-head"><span>${escapeHtml(generationModeLabel(job))} · ${escapeHtml(promptId)}</span><strong>${percent}%</strong></div><div class="progress-track"><i style="width:${percent}%"></i></div>
+    ${job.error?`<div class="progress-error"><b>最近错误 · ${escapeHtml(progressPhaseLabel(job))}${job.failed_at?' · '+escapeHtml(String(job.failed_at).replace('T',' ').slice(0,19)):''}</b>${escapeHtml(job.error)}</div>`:''}
+  </div>`;
+}
+function generationModeLabel(job){
+  if(job.generation_mode==='text'||job.task_type==='T2VA')return '文生视频';
+  if(job.generation_mode==='reference'||job.task_type==='Ref2VA')return '参考生视频';
+  return '图生视频';
+}
+function workflowLabel(job){return workflowPresetLabels[job.workflow_preset]||workflowPresetLabels.standard}
+function jobQualityLabel(job){
+  if(job.target_width&&job.target_height)return job.target_width+'×'+job.target_height;
+  return (job.requested_megapixels??job.megapixels??0.9)+' MP';
+}
+function outputUrl(job){return '/api/jobs/'+encodeURIComponent(job.id)+'/output'}
+function renderResultStage(){
+  const active=jobsCache.find(job=>['submitting','queued','running','retrieving'].includes(job.status));
+  const latest=jobsCache[0];
+  const monitor=active||latest;
+  activeProgressSlot.innerHTML=monitor?progressMarkup(monitor,'active-progress'):'';
+  const completed=jobsCache.filter(job=>job.status==='completed');
+  const newest=completed[0];
+  if(newest&&newest.id!==latestCompletedId){latestCompletedId=newest.id;selectedJobId=newest.id}
+  const selected=completed.find(job=>job.id===selectedJobId)||newest;
+  if(!selected){
+    if(resultContent.dataset.jobId){
+      resultContent.dataset.jobId='';
+      resultContent.innerHTML='<div class="result-empty"><div><strong>成品会自动回到这里</strong>提交后可以离开页面，完成后会自动归档到当前 H3 项目的输出目录并在这里播放。</div></div>';
+    }
+    return;
+  }
+  selectedJobId=selected.id;
+  if(resultContent.dataset.jobId===selected.id)return;
+  resultContent.dataset.jobId=selected.id;
+  resultContent.innerHTML=`
+    <video class="result-video" controls playsinline preload="metadata" src="${outputUrl(selected)}"></video>
+    <div class="result-info">
+      <div><h3>${escapeHtml(selected.prompt||'MiniMax H3 生成视频')}</h3><div class="result-path">本地输出：${escapeHtml(selected.output_path||selected.output_name||'当前 H3 项目输出目录')}</div></div>
+      <div class="result-actions"><button class="action-button" id="openPreview" type="button">放大预览</button><button class="action-button" id="openFolder" type="button">打开本地文件夹</button></div>
+    </div>`;
+  document.getElementById('openPreview').addEventListener('click',()=>openPreview(selected.id));
+  document.getElementById('openFolder').addEventListener('click',openOutputFolder);
+}
+async function reuseHistoryJob(jobId){
+  const job=jobsCache.find(item=>item.id===jobId);
+  if(!job)return;
+  showMessage('正在恢复历史提示词和参考图…');
+  try{
+    const response=await fetch('/api/jobs/'+encodeURIComponent(jobId)+'/reuse');
+    const body=await response.json();
+    if(!response.ok)throw new Error(body.error||'复用历史任务失败');
+    const restored=[];
+    for(const image of body.images||[]){
+      const imageResponse=await fetch(image.url);
+      if(!imageResponse.ok)throw new Error('参考图恢复失败：'+(image.name||'未知图片'));
+      const blob=await imageResponse.blob();
+      restored.push(new File([blob],image.name||('参考图'+(restored.length+1)+'.png'),{type:blob.type||'image/png'}));
+    }
+    promptEl.value=body.prompt||'';
+    files=restored;
+    const originalMode=modeInputs.find(input=>input.value===(body.generation_mode||'text'));
+    if(originalMode)originalMode.checked=true;
+    renderRefs();
+    promptEl.focus();
+    promptEl.scrollIntoView({behavior:'smooth',block:'start'});
+    const suffix=body.warning?'；'+body.warning:(restored.length?'，已恢复 '+restored.length+' 张参考图':'');
+    showMessage('已复用历史提示词'+suffix,body.warning?'':'ok');
+  }catch(error){showMessage(error.message,'error')}
+}
+
+async function openOutputFolder(){
+  try{
+    const response=await fetch('/api/open-output-folder',{method:'POST'});const body=await response.json();
+    if(!response.ok)throw new Error(body.error||'打开文件夹失败');
+    showMessage('已打开本地文件夹：'+body.path,'ok');
+  }catch(error){showMessage(error.message,'error')}
+}
+function openPreview(jobId){
+  const job=jobsCache.find(item=>item.id===jobId&&item.status==='completed');
+  if(!job)return;
+  previewTitle.textContent=job.prompt||'视频预览';
+  previewMeta.textContent=(job.seconds+'秒 · '+workflowLabel(job)+' · '+jobQualityLabel(job)+' · '+generationModeLabel(job)+' · ')+(job.output_path||job.output_name||'当前 H3 项目输出目录');
+  previewVideo.src=outputUrl(job);
+  previewModal.hidden=false;document.body.style.overflow='hidden';previewVideo.load();
+}
+function closePreview(){
+  previewVideo.pause();previewVideo.removeAttribute('src');previewVideo.load();previewModal.hidden=true;document.body.style.overflow='';
+}
+document.getElementById('previewClose').addEventListener('click',closePreview);
+previewOpenFolder.addEventListener('click',openOutputFolder);
+previewModal.addEventListener('click',event=>{if(event.target===previewModal)closePreview()});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!previewModal.hidden)closePreview()});
+async function loadJobs(){
+  try{
+    const response=await fetch('/api/jobs');const body=await response.json();
+    if(!response.ok)throw new Error(body.error||'读取任务失败');
+    jobsCache=body.jobs||[];jobCount.textContent=jobsCache.length+' 条';renderResultStage();
+    if(!jobsCache.length){jobsEl.innerHTML='<div class="empty">还没有 H3 任务</div>';return}
+    jobsEl.innerHTML=jobsCache.map(job=>`
+      <article class="job ${job.id===selectedJobId?'selected':''}">
+        <div class="job-top"><div class="job-id">${escapeHtml(job.id)}</div><span class="badge ${escapeHtml(job.status)}">${statusLabel(job.status)}</span></div>
+        <div class="job-meta"><span>${workflowLabel(job)}</span><span>${generationModeLabel(job)}</span><span>${escapeHtml(job.aspect_ratio).split(' ')[0]}</span><span>${jobQualityLabel(job)}</span><span>${job.seconds}秒 / ${job.length}帧</span><span>${job.image_count}张图</span></div>
+        <div class="job-prompt">${escapeHtml(job.prompt||'')}</div>
+        ${['submitting','queued','running','retrieving','failed'].includes(job.status)?progressMarkup(job,'job-progress',true):''}
+        ${job.error?'<div class="job-error">'+escapeHtml(job.error)+'</div>':''}
+        ${job.status==='completed'?'<div class="job-actions"><button class="action-button" type="button" data-select-result="'+escapeHtml(job.id)+'">在上方播放</button><button class="action-button" type="button" data-preview="'+escapeHtml(job.id)+'">放大预览</button>'+(job.legacy_history?'':'<button class="action-button" type="button" data-reuse="'+escapeHtml(job.id)+'">复用提示词和图片</button>')+'</div>':''}
+      </article>`).join('');
+    jobsEl.querySelectorAll('[data-select-result]').forEach(button=>button.addEventListener('click',()=>{selectedJobId=button.dataset.selectResult;renderResultStage();loadJobs()}));
+    jobsEl.querySelectorAll('[data-preview]').forEach(button=>button.addEventListener('click',()=>openPreview(button.dataset.preview)));
+    jobsEl.querySelectorAll('[data-reuse]').forEach(button=>button.addEventListener('click',()=>reuseHistoryJob(button.dataset.reuse)));
+  }catch(error){jobsEl.innerHTML='<div class="empty">'+escapeHtml(error.message)+'</div>';if(!resultContent.dataset.jobId)resultContent.innerHTML='<div class="result-empty"><div><strong>暂时无法读取结果</strong>'+escapeHtml(error.message)+'</div></div>'}
+}
+document.getElementById('refresh').addEventListener('click',loadJobs);
+submitEl.addEventListener('click',async()=>{
+  const prompt=promptEl.value.trim();
+  if(!prompt){showMessage('先填写提示词。','error');promptEl.focus();return}
+  const [,modeLabel,selectedMode]=modeInfo();
+  if(selectedMode!=='text'&&!files.length){showMessage(modeLabel+'需要先上传至少 1 张图片。','error');imagesEl.focus();return}
+  const preset=workflowPreset();
+  const spec=workflowSpec(preset);
+  const description=secondsEl.value+'秒 · '+spec.label+' · '+spec.quality+' · '+modeLabel+' · '+files.length+'张图';
+  if(!window.confirm('确认提交到 H3？\n\n'+description))return;
+  submitEl.disabled=true;submitEl.textContent='正在上传并排队…';showMessage('正在把图片与工作流提交到ComfyUI。');
+  try{
+    const form=new FormData();
+    form.append('prompt',prompt);form.append('aspect_ratio',aspectEl.value);form.append('seconds',secondsEl.value);form.append('megapixels',megapixelsEl.value);
+    form.append('workflow_preset',preset);
+    form.append('generation_mode',selectedMode);
+    form.append('first_as_frame',String(selectedMode==='image'));
+    files.forEach(file=>form.append('images',file,file.name));
+    const submitRequest=fetch('/api/submit',{method:'POST',body:form});
+    window.setTimeout(()=>loadJobs(),300);
+    const response=await submitRequest;
+    const body=await response.json();
+    if(!response.ok)throw new Error(body.error||'提交失败');
+    showMessage('任务已进入ComfyUI：'+body.job.prompt_id,'ok');
+    await loadJobs();
+  }catch(error){showMessage(error.message,'error')}
+  finally{submitEl.disabled=false;submitEl.textContent='提交到 H3'}
+});
+window.addEventListener('message',event=>{
+  if(event.data?.type==='director-theme'&&event.data.theme==='daylight')document.documentElement.style.colorScheme='light';
+});
+updateSummary();checkStatus();loadJobs();
+setInterval(checkStatus,10000);setInterval(loadJobs,2000);
+</script>
+</body>
+</html>

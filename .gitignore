@@ -1,0 +1,8 @@
+.env
+data/
+dist/
+node_modules/
+*.log
+.smoke-*
+.DS_Store
+Thumbs.db

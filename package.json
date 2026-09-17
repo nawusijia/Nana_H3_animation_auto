@@ -8,6 +8,7 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "server:check": "node --check server.mjs",
+    "smoke:agent": "node scripts/agent-protocol-smoke.mjs",
     "check": "npm run typecheck && npm run build && npm run server:check",
     "start": "npm run build && node server.mjs"
   },

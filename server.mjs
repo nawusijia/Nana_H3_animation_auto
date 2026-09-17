@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
-import { copyFile, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
@@ -86,7 +86,7 @@ const jsonHeaders = {
   'cache-control': 'no-store',
   'access-control-allow-origin': '*',
   'access-control-allow-headers': 'content-type',
-  'access-control-allow-methods': 'GET,POST,OPTIONS',
+  'access-control-allow-methods': 'GET,POST,PUT,OPTIONS',
 };
 
 function sendJson(res, status, value) {
@@ -235,6 +235,229 @@ async function loadWorkflowState(runtime) {
     sequenceEndStates: {},
     updatedAt: new Date().toISOString(),
   });
+}
+
+const H3_AGENT_PIPELINE_STAGES = Object.freeze(['outline', 'assets', 'shots', 'sequences', 'prompts', 'reviewer']);
+
+function h3AgentOnlyModeEnabled() {
+  const fileValues = loadEnvFileValues(H3_ENV_PATH);
+  return !/^false$/i.test(String(process.env.NANA_H3_AGENT_ONLY || fileValues.NANA_H3_AGENT_ONLY || 'true').trim());
+}
+
+function h3AgentPolicy() {
+  const agentOnly = h3AgentOnlyModeEnabled();
+  return {
+    mode: agentOnly ? 'agent_owned' : 'legacy_provider_opt_in',
+    owner: 'external-local-agent',
+    agentOnly,
+    disabledProviders: agentOnly ? ['glm', 'openai'] : [],
+    stages: [...H3_AGENT_PIPELINE_STAGES, 'execution'],
+    invariants: [
+      'The external local Agent owns screenplay analysis, asset planning, Shot design, Sequence assembly, Prompt writing, review, and repair decisions.',
+      'The H3 server owns deterministic validation, checkpoints, workspace projection, asset gates, queueing, continuity frames, and MiniMax H3 execution.',
+      'No model API key is required in agent-owned mode. Browser UI must not silently call GLM/OpenAI or another network model provider.',
+      'Each completed stage is written through its completion API and may not skip the current nextStage.',
+      'MiniMax H3 / ComfyUI remains an execution engine only; it does not make screenplay, Shot, Sequence, or Prompt decisions.',
+    ],
+  };
+}
+
+function h3AgentSourceFingerprint(workflow) {
+  return workflowFingerprint({ sourceText: String(workflow?.sourceText || '') });
+}
+
+function h3AgentCheckpointPath(runtime, stage) {
+  return path.join(runtime.workbenchDir, 'agent', 'checkpoints', `${stage}.json`);
+}
+
+async function readH3AgentCheckpoint(runtime, workflow, stage) {
+  const checkpoint = await readJson(h3AgentCheckpointPath(runtime, stage), null);
+  if (!checkpoint || checkpoint.sourceFingerprint !== h3AgentSourceFingerprint(workflow)) return null;
+  return checkpoint;
+}
+
+function h3AgentStageContract(stage) {
+  const contracts = {
+    outline: {
+      goal: 'Read the locked source script and create natural Scene boundaries plus the initial character/scene/prop catalog.',
+      artifactShape: '{ outline: { settings, sceneOutlines[] }, settings }',
+      required: ['outline.sceneOutlines[]', 'settings.characters[]', 'settings.scenes[]', 'settings.assets[]'],
+    },
+    assets: {
+      goal: 'Finalize reusable asset records and reference-image design prompts. Do not generate video and do not invent private machine paths.',
+      artifactShape: '{ settings }',
+      required: ['settings.characters[]', 'settings.scenes[]', 'settings.assets[]'],
+    },
+    shots: {
+      goal: 'Convert every Scene into ordered atomic visual Shots with natural candidate durations, direction, speech, characterIds and assetIds.',
+      artifactShape: '{ shots[] }',
+      required: ['shots[].id', 'shots[].sceneId', 'shots[].order', 'shots[].durationSeconds', 'shots[].direction'],
+    },
+    sequences: {
+      goal: 'Assemble approved Shots into H3 execution Sequences of 5-15 integer seconds without changing Shot content or dialogue.',
+      artifactShape: '{ sequences[] }',
+      required: ['sequences[].id', 'sequences[].sceneId', 'sequences[].order', 'sequences[].shotIds[]', 'sequences[].durationSeconds'],
+    },
+    prompts: {
+      goal: 'Compile one executable H3 video Prompt per Sequence and return Director Read, audit, and end-state continuity data.',
+      artifactShape: '{ prompts, directorReads, generationAudits, sequenceEndStates }',
+      required: ['prompts[sequenceId]', 'directorReads[sequenceId]', 'generationAudits[sequenceId]', 'sequenceEndStates[sequenceId]'],
+    },
+    reviewer: {
+      goal: 'Review the full Agent-authored plan. Return pass only after source text, dialogue, Shot order, durations, assets and Prompt structure are consistent.',
+      artifactShape: '{ status: "pass", findings?: [] }',
+      required: ['status=pass'],
+    },
+    execution: {
+      goal: 'Planning is committed. Bind actual reference images, rebuild the H3 queue, then start generation from the UI or execution API.',
+      artifactShape: 'No planning artifact. H3 execution remains confirmation-gated.',
+      required: [],
+    },
+  };
+  return contracts[stage] || null;
+}
+
+function assertAgentArtifact(condition, message) {
+  if (!condition) throw Object.assign(new Error(message), { status: 400 });
+}
+
+function validateH3AgentStageArtifact(stage, artifact, workflow) {
+  if (stage === 'outline') {
+    const outline = artifact?.outline;
+    const settings = artifact?.settings || outline?.settings;
+    assertAgentArtifact(outline && Array.isArray(outline.sceneOutlines) && outline.sceneOutlines.length > 0, 'Agent outline 阶段必须返回至少一个 Scene。');
+    assertAgentArtifact(settings && typeof settings === 'object', 'Agent outline 阶段缺少 settings。');
+  } else if (stage === 'assets') {
+    assertAgentArtifact(artifact?.settings && typeof artifact.settings === 'object', 'Agent assets 阶段缺少 settings。');
+  } else if (stage === 'shots') {
+    assertAgentArtifact(Array.isArray(artifact?.shots) && artifact.shots.length > 0, 'Agent shots 阶段必须返回 shots[]。');
+    const sceneIds = new Set((workflow?.outline?.sceneOutlines || []).map(scene => String(scene.id || '')));
+    for (const shot of artifact.shots) {
+      assertAgentArtifact(shot?.id && sceneIds.has(String(shot.sceneId || '')), `Shot ${shot?.id || '(missing id)'} 的 sceneId 无效。`);
+      assertAgentArtifact(Number(shot?.durationSeconds) > 0, `Shot ${shot.id} 缺少有效 durationSeconds。`);
+    }
+  } else if (stage === 'sequences') {
+    assertAgentArtifact(Array.isArray(artifact?.sequences) && artifact.sequences.length > 0, 'Agent sequences 阶段必须返回 sequences[]。');
+    const shotIds = new Set((workflow?.shots || []).map(shot => String(shot.id || '')));
+    for (const sequence of artifact.sequences) {
+      const duration = Number(sequence?.durationSeconds);
+      assertAgentArtifact(sequence?.id && Array.isArray(sequence.shotIds) && sequence.shotIds.length > 0, '每条 Sequence 必须包含 id 与 shotIds[]。');
+      assertAgentArtifact(Number.isInteger(duration) && duration >= H3_MIN_SECONDS && duration <= H3_MAX_SECONDS, `Sequence ${sequence.id} 必须为 ${H3_MIN_SECONDS}～${H3_MAX_SECONDS} 秒整数。`);
+      for (const shotId of sequence.shotIds) assertAgentArtifact(shotIds.has(String(shotId)), `Sequence ${sequence.id} 引用了不存在的 Shot：${shotId}`);
+    }
+    const assigned = artifact.sequences.flatMap(sequence => sequence.shotIds.map(String));
+    assertAgentArtifact(new Set(assigned).size === assigned.length, '同一个 Shot 不能被重复装入多个 Sequence。');
+    assertAgentArtifact((workflow?.shots || []).every(shot => assigned.includes(String(shot.id))), '所有已批准 Shot 都必须进入一个 Sequence。');
+  } else if (stage === 'prompts') {
+    const prompts = artifact?.prompts || {};
+    const directorReads = artifact?.directorReads || {};
+    const generationAudits = artifact?.generationAudits || {};
+    const sequenceEndStates = artifact?.sequenceEndStates || {};
+    for (const sequence of workflow?.sequences || []) {
+      const sequenceShots = (sequence.shotIds || []).map(id => (workflow.shots || []).find(shot => String(shot.id) === String(id))).filter(Boolean);
+      validateGlmSequenceResult({
+        directorRead: directorReads[sequence.id],
+        generationAudit: generationAudits[sequence.id],
+        videoPrompt: prompts[sequence.id],
+        endState: sequenceEndStates[sequence.id],
+      }, Number(sequence.durationSeconds || 0), sequenceShots);
+    }
+  } else if (stage === 'reviewer') {
+    assertAgentArtifact(String(artifact?.status || '').toLowerCase() === 'pass', 'Reviewer 阶段只有 status=pass 才能提交执行。');
+  }
+}
+
+async function applyH3AgentStage(runtime, workflow, stage, artifact) {
+  validateH3AgentStageArtifact(stage, artifact, workflow);
+  const next = { ...workflow, version: 1, updatedAt: new Date().toISOString() };
+  if (stage === 'outline') {
+    next.outline = artifact.outline;
+    next.settings = artifact.settings || artifact.outline.settings || null;
+    if (next.outline && next.settings) next.outline = { ...next.outline, settings: next.settings };
+  } else if (stage === 'assets') {
+    next.settings = artifact.settings;
+    next.outline = { ...(next.outline || {}), settings: artifact.settings };
+  } else if (stage === 'shots') {
+    next.shots = artifact.shots;
+  } else if (stage === 'sequences') {
+    next.sequences = artifact.sequences;
+  } else if (stage === 'prompts') {
+    next.prompts = artifact.prompts || {};
+    next.directorReads = artifact.directorReads || {};
+    next.generationAudits = artifact.generationAudits || {};
+    next.sequenceEndStates = artifact.sequenceEndStates || {};
+  } else if (stage === 'reviewer') {
+    const workspace = buildWorkflowWorkspace(runtime, next);
+    await writeJsonAtomic(path.join(runtime.workbenchDir, 'workspace.json'), workspace);
+    await saveAutoPlan(runtime, planH3AutoComic(workspace, runtime));
+  }
+  next.stage = stage === 'reviewer' ? 'execution' : stage;
+  await writeJsonAtomic(workflowStatePath(runtime), next);
+  const checkpoint = {
+    schemaVersion: 1,
+    stage,
+    status: 'completed',
+    sourceFingerprint: h3AgentSourceFingerprint(next),
+    updatedAt: new Date().toISOString(),
+    artifact,
+  };
+  await writeJsonAtomic(h3AgentCheckpointPath(runtime, stage), checkpoint);
+  return { workflow: next, checkpoint };
+}
+
+async function getH3AgentPipeline(runtime, workflow) {
+  if (!String(workflow?.sourceText || '').trim()) {
+    return { nextStage: 'script', completedStages: [], missingPrerequisites: ['sourceText'] };
+  }
+  const completedStages = [];
+  for (const stage of H3_AGENT_PIPELINE_STAGES) {
+    const checkpoint = await readH3AgentCheckpoint(runtime, workflow, stage);
+    if (!checkpoint || checkpoint.status !== 'completed') {
+      return { nextStage: stage, completedStages, missingPrerequisites: [] };
+    }
+    completedStages.push(stage);
+  }
+  return { nextStage: 'execution', completedStages, missingPrerequisites: [] };
+}
+
+async function buildH3AgentBootstrap(runtime) {
+  const workflow = await loadWorkflowState(runtime);
+  const pipeline = await getH3AgentPipeline(runtime, workflow);
+  const nextStage = pipeline.nextStage;
+  return {
+    kind: 'nana-h3-open-source-agent-bootstrap',
+    schemaVersion: 1,
+    repository: {
+      product: 'Nana H3 Animation Auto',
+      edition: 'public-open-source',
+      isolation: 'This repository is standalone. Never read from or write to Nana Director Console production directories.',
+    },
+    policy: h3AgentPolicy(),
+    project: {
+      id: runtime.project.id,
+      name: runtime.project.name,
+      root: runtime.projectRoot,
+    },
+    pipeline,
+    stage: {
+      id: nextStage,
+      contract: h3AgentStageContract(nextStage),
+      contextApi: nextStage === 'script' ? null : `/api/agent/context/${nextStage}`,
+      delivery: nextStage === 'execution' || nextStage === 'script' ? null : {
+        completionApi: `/api/agent/pipeline/${nextStage}`,
+        method: 'PUT',
+        body: '{ "status": "completed", "artifact": { ... } }',
+      },
+    },
+    workflowSummary: {
+      stage: workflow.stage || 'script',
+      sourceChars: String(workflow.sourceText || '').length,
+      scenes: workflow?.outline?.sceneOutlines?.length || 0,
+      shots: workflow?.shots?.length || 0,
+      sequences: workflow?.sequences?.length || 0,
+      prompts: Object.keys(workflow?.prompts || {}).length,
+    },
+  };
 }
 
 function buildWorkflowWorkspace(runtime, input) {
@@ -513,7 +736,7 @@ function planH3AutoComic(workspace, runtime) {
         sceneId: scene.id,
         shotIds: shots.map(shot => shot.id),
         reason: 'missing_sequence_prompt',
-        message: `${scene.title || scene.id} 的 Sequence ${sequence.id} 没有 GLM-5.3 返回的提示词；请先完成“Sequence → GLM-5.3”步骤。`,
+        message: `${scene.title || scene.id} 的 Sequence ${sequence.id} 没有 Agent 回填的 H3 Prompt；请先完成 prompts 阶段。`,
       });
       continue;
     }
@@ -582,7 +805,7 @@ function planH3AutoComic(workspace, runtime) {
       sceneId: scene.id,
       shotIds: sequence.shotIds,
       reason: 'missing_sequence_prompt',
-      message: `${scene.title || scene.id} 的自动补齐 Sequence 没有 GLM-5.3 提示词；不能使用本地编译器代替。`,
+      message: `${scene.title || scene.id} 的自动补齐 Sequence 没有 Agent Prompt；请回到 Agent prompts 阶段修复。`,
     });
     continue;
   }
@@ -2429,40 +2652,40 @@ function validateDialogue(videoPrompt, durationSeconds, expectedSpeech) {
   const expected = collectSpeechLines(expectedSpeech);
   const actualLines = extractPromptSpeech(videoPrompt);
   if (!expected.length) {
-    if (actualLines.length) throw new Error('GLM-5.3 在原文没有台词或旁白时新增了朗读内容。');
+    if (actualLines.length) throw new Error('Agent Prompt 在原文没有台词或旁白时新增了朗读内容。');
     return;
   }
   const expectedText = expected.map(line => normalizeSpeechText(line.text)).join('');
   const actualText = actualLines.join('');
   if (!actualText || actualText !== expectedText) {
     const candidates = String(videoPrompt).split(/\r?\n/).filter(line => /台词|对白|旁白|画外音|OS/i.test(line)).slice(0, 8).join(' | ').slice(0, 360);
-    throw new Error(`GLM-5.3 返回的台词与原文不一致：期望“${expectedText}”，实际“${actualText}”；候选声音行：“${candidates}”；必须逐字保留、按原顺序出现，不能改写、重复、补写或提前说后续台词。`);
+    throw new Error(`Agent Prompt 的台词与原文不一致：期望“${expectedText}”，实际“${actualText}”；候选声音行：“${candidates}”；必须逐字保留、按原顺序出现，不能改写、重复、补写或提前说后续台词。`);
   }
   const estimatedSeconds = estimateSpeechSeconds(expected);
   if (estimatedSeconds > durationSeconds) {
-    throw new Error(`GLM-5.3 返回的台词按宽松语速估算约需 ${estimatedSeconds.toFixed(1)} 秒，超过 Sequence 的 ${durationSeconds} 秒，无法保证完整说完。`);
+    throw new Error(`Agent Prompt 的台词按宽松语速估算约需 ${estimatedSeconds.toFixed(1)} 秒，超过 Sequence 的 ${durationSeconds} 秒，无法保证完整说完。`);
   }
 }
 
 function validateGlmSequenceResult(result, durationSeconds, expectedSpeech = []) {
   const read = result?.directorRead;
   if (!read || DIRECTOR_READ_FIELDS.some(field => !String(read[field] || '').trim())) {
-    throw new Error('GLM-5.3 返回的 Sequence 缺少完整 Director Read（10 项导演判断）。');
+    throw new Error('Agent Sequence 缺少完整 Director Read（10 项导演判断）。');
   }
   const videoPrompt = String(result?.videoPrompt || '').trim();
-  if (!videoPrompt) throw new Error('GLM-5.3 没有返回 videoPrompt。');
+  if (!videoPrompt) throw new Error('Agent 没有回填 videoPrompt。');
   for (const heading of ['【生成规格】', '【导演原则】', '【场景设定】', '【声音设定】', '【氛围与画质】', '【画面内容】', '【生成限制】']) {
-    if (!videoPrompt.includes(heading)) throw new Error(`GLM-5.3 返回的 videoPrompt 缺少固定结构：${heading}`);
+    if (!videoPrompt.includes(heading)) throw new Error(`Agent videoPrompt 缺少固定结构：${heading}`);
   }
-  if (/\d+\.\d+s/i.test(videoPrompt)) throw new Error('GLM-5.3 返回了小数时间码；H3 只接受整数秒。');
+  if (/\d+\.\d+s/i.test(videoPrompt)) throw new Error('Agent videoPrompt 使用了小数时间码；H3 只接受整数秒。');
   if (/(?:0-3s|3-6s|6-10s|10-15s)/i.test(videoPrompt)) {
-    throw new Error('GLM-5.3 返回了旧的 0-3s / 3-6s / 6-10s / 10-15s 模板。');
+    throw new Error('Agent videoPrompt 使用了旧的 0-3s / 3-6s / 6-10s / 10-15s 模板。');
   }
   if (/\[(?:[^\]]*景|[^\]]*拍|[^\]]*镜头)[^\]]*\]/.test(videoPrompt)) {
-    throw new Error('GLM-5.3 返回了旧式复杂括号镜头标签。');
+    throw new Error('Agent videoPrompt 使用了旧式复杂括号镜头标签。');
   }
   const blocks = [...videoPrompt.matchAll(/shot(\d+)\((\d+)s-(\d+)s\)/g)];
-  if (!blocks.length) throw new Error('GLM-5.3 返回的 videoPrompt 没有 shot1(0s-3s) 格式的 Shot。');
+  if (!blocks.length) throw new Error('Agent videoPrompt 没有 shot1(0s-3s) 格式的 Shot。');
   let cursor = 0;
   let previousNumber = 0;
   for (const block of blocks) {
@@ -2470,19 +2693,19 @@ function validateGlmSequenceResult(result, durationSeconds, expectedSpeech = [])
     const start = Number(block[2]);
     const end = Number(block[3]);
     if (number !== previousNumber + 1 || start !== cursor || end <= start) {
-      throw new Error('GLM-5.3 返回的 Shot 时间轴不连续或顺序错误。');
+      throw new Error('Agent videoPrompt 的 Shot 时间轴不连续或顺序错误。');
     }
     const headerEnd = block.index + block[0].length;
-    if (videoPrompt[headerEnd] !== '\n') throw new Error('GLM-5.3 的 Shot 标题必须独占一行，不能把景别写在 shotN(...) 同一行。');
+    if (videoPrompt[headerEnd] !== '\n') throw new Error('Agent Prompt 的 Shot 标题必须独占一行，不能把景别写在 shotN(...) 同一行。');
     cursor = end;
     previousNumber = number;
   }
   if (cursor !== durationSeconds) {
-    throw new Error(`GLM-5.3 返回的 Shot 时间轴结束于 ${cursor}s，不等于 Sequence 总时长 ${durationSeconds}s。`);
+    throw new Error(`Agent Prompt 的 Shot 时间轴结束于 ${cursor}s，不等于 Sequence 总时长 ${durationSeconds}s。`);
   }
   // H3 上限只有 15 秒，不按总时长强制计算 Shot 数；只要求每个 Shot 有独立动作、时间轴连续且可执行。
   if (/【匹配资产】|asset[_-]?id|上传参考图|上传说明/i.test(videoPrompt)) {
-    throw new Error('GLM-5.3 把资产匹配或上传说明混入了 videoPrompt。');
+    throw new Error('Agent 把资产匹配或上传说明混入了 videoPrompt。');
   }
   const generatedNarrative = [
     ...DIRECTOR_READ_FIELDS.map(field => String(read[field] || '')),
@@ -2492,16 +2715,16 @@ function validateGlmSequenceResult(result, durationSeconds, expectedSpeech = [])
   ].join('\n');
   const transitionMatch = findPostTransitionViolation(generatedNarrative);
   if (transitionMatch) {
-    throw new Error(`GLM-5.3 在生成内容中写入了后期转场方式（命中：${transitionMatch.term}）；镜头交接、片头和片尾必须直接从有效画面开始或结束，后期转场不写进生成提示词。`);
+    throw new Error(`Agent 在生成内容中写入了后期转场方式（命中：${transitionMatch.term}）；镜头交接、片头和片尾必须直接从有效画面开始或结束，后期转场不写进生成提示词。`);
   }
   const appearanceMatch = findVisualAppearanceViolation(generatedNarrative);
   if (appearanceMatch) {
     const context = generatedNarrative.slice(Math.max(0, appearanceMatch.index - 24), Math.min(generatedNarrative.length, appearanceMatch.index + appearanceMatch.term.length + 24)).replace(/\s+/g, ' ');
-    throw new Error(`GLM-5.3 在生成内容中复述了资产外观（命中：${appearanceMatch.term}，上下文：${context}）；外观必须由参考资产图决定。`);
+    throw new Error(`Agent 在生成内容中复述了资产外观（命中：${appearanceMatch.term}，上下文：${context}）；外观必须由参考资产图决定。`);
   }
   const audit = result?.generationAudit;
   if (!audit || GENERATION_AUDIT_FIELDS.some(field => !String(audit[field] || '').trim())) {
-    throw new Error('GLM-5.3 返回的生成 Agent 审核不完整。');
+    throw new Error('Agent 返回的生成审核不完整。');
   }
   if (String(audit.appearanceCheck).toLowerCase() !== 'pass') {
     throw new Error('生成 Agent 审核未通过：videoPrompt 仍包含角色或资产外观复述。');
@@ -3188,7 +3411,94 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/agent/bootstrap') {
+    const runtime = await projectRuntime();
+    sendJson(res, 200, await buildH3AgentBootstrap(runtime));
+    return;
+  }
+
+  if (req.method === 'PUT' && url.pathname === '/api/agent/source') {
+    const runtime = await projectRuntime();
+    if (AUTO_RUNS.has(runtime.projectRoot)) throw Object.assign(new Error('H3 正在生成中，不能重置 Agent 规划源。'), { status: 409 });
+    const body = await parseJsonBody(req);
+    const sourceText = String(body.sourceText || '').trim();
+    if (!sourceText) throw Object.assign(new Error('请先输入 H3 剧本。'), { status: 400 });
+    const workflow = {
+      version: 1,
+      stage: 'script',
+      sourceText,
+      scriptMode: String(body.scriptMode || 'original'),
+      isOtome: Boolean(body.isOtome),
+      outline: null,
+      settings: null,
+      shots: [],
+      sequences: [],
+      prompts: {},
+      directorReads: {},
+      generationAudits: {},
+      sequenceEndStates: {},
+      updatedAt: new Date().toISOString(),
+    };
+    await rm(path.join(runtime.workbenchDir, 'agent', 'checkpoints'), { recursive: true, force: true });
+    await writeJsonAtomic(workflowStatePath(runtime), workflow);
+    await unlink(path.join(runtime.workbenchDir, 'workspace.json')).catch(() => {});
+    await unlink(autoPlanPath(runtime)).catch(() => {});
+    sendJson(res, 200, { project: runtime.project, workflow, bootstrap: await buildH3AgentBootstrap(runtime) });
+    return;
+  }
+
+  const agentContextMatch = url.pathname.match(/^\/api\/agent\/context\/([^/]+)$/);
+  if (req.method === 'GET' && agentContextMatch) {
+    const runtime = await projectRuntime();
+    const stage = decodeURIComponent(agentContextMatch[1]);
+    if (![...H3_AGENT_PIPELINE_STAGES, 'execution'].includes(stage)) {
+      throw Object.assign(new Error(`未知 Agent stage：${stage}`), { status: 404 });
+    }
+    const workflow = await loadWorkflowState(runtime);
+    const pipeline = await getH3AgentPipeline(runtime, workflow);
+    if (stage !== pipeline.nextStage && !pipeline.completedStages.includes(stage)) {
+      throw Object.assign(new Error(`当前合法 stage 是 ${pipeline.nextStage}，不能跳到 ${stage}。`), { status: 409 });
+    }
+    sendJson(res, 200, {
+      project: { id: runtime.project.id, name: runtime.project.name, root: runtime.projectRoot },
+      policy: h3AgentPolicy(),
+      pipeline,
+      stage,
+      contract: h3AgentStageContract(stage),
+      workflow,
+    });
+    return;
+  }
+
+  const agentPipelineMatch = url.pathname.match(/^\/api\/agent\/pipeline\/([^/]+)$/);
+  if (req.method === 'PUT' && agentPipelineMatch) {
+    const runtime = await projectRuntime();
+    if (AUTO_RUNS.has(runtime.projectRoot)) throw Object.assign(new Error('H3 正在生成中，不能修改 Agent 规划。'), { status: 409 });
+    const stage = decodeURIComponent(agentPipelineMatch[1]);
+    if (!H3_AGENT_PIPELINE_STAGES.includes(stage)) {
+      throw Object.assign(new Error(`未知 Agent planning stage：${stage}`), { status: 404 });
+    }
+    const workflow = await loadWorkflowState(runtime);
+    const pipeline = await getH3AgentPipeline(runtime, workflow);
+    if (pipeline.nextStage !== stage) {
+      throw Object.assign(new Error(`不能跳阶段：当前 nextStage=${pipeline.nextStage}，收到 ${stage}。`), { status: 409 });
+    }
+    const body = await parseJsonBody(req);
+    if (String(body.status || '').toLowerCase() !== 'completed') {
+      throw Object.assign(new Error('Agent pipeline 目前只接受 status=completed；失败时保留当前 stage 修复后重交。'), { status: 400 });
+    }
+    const result = await applyH3AgentStage(runtime, workflow, stage, body.artifact || {});
+    sendJson(res, 200, {
+      project: runtime.project,
+      checkpoint: result.checkpoint,
+      workflow: result.workflow,
+      bootstrap: await buildH3AgentBootstrap(runtime),
+    });
+    return;
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/workflow/analyze-outline') {
+    if (h3AgentOnlyModeEnabled()) throw Object.assign(new Error('当前为 Agent 接管模式：网页不再调用 GLM API。请读取 /api/agent/bootstrap，由本地 Agent 完成 outline 阶段。'), { status: 423 });
     const body = await parseJsonBody(req);
     const sourceText = String(body.sourceText || '').trim();
     if (!sourceText) throw Object.assign(new Error('请先输入 H3 剧本。'), { status: 400 });
@@ -3198,6 +3508,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/workflow/generate-shots') {
+    if (h3AgentOnlyModeEnabled()) throw Object.assign(new Error('当前为 Agent 接管模式：网页不再调用 GLM API。请读取 /api/agent/bootstrap，由本地 Agent 完成 shots 阶段。'), { status: 423 });
     const body = await parseJsonBody(req);
     const outline = body.outline || {};
     const sceneIndex = Number(body.sceneIndex);
@@ -3211,6 +3522,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/workflow/generate-sequence-prompt') {
+    if (h3AgentOnlyModeEnabled()) throw Object.assign(new Error('当前为 Agent 接管模式：网页不再调用 GLM API。请读取 /api/agent/bootstrap，由本地 Agent 完成 prompts 阶段。'), { status: 423 });
     const body = await parseJsonBody(req);
     const sequence = body.sequence || {};
     const shots = Array.isArray(body.shots) ? body.shots : [];
@@ -3231,6 +3543,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/workflow/generate-asset-designs') {
+    if (h3AgentOnlyModeEnabled()) throw Object.assign(new Error('当前为 Agent 接管模式：网页不再调用 GLM API。请读取 /api/agent/bootstrap，由本地 Agent 完成 assets 阶段。'), { status: 423 });
     const body = await parseJsonBody(req);
     if (!body.settings || typeof body.settings !== 'object') {
       throw Object.assign(new Error('缺少有效的 H3 资产设定。'), { status: 400 });

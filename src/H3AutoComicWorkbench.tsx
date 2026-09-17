@@ -366,7 +366,7 @@ export function H3AutoComicWorkbench() {
     { label: 'Scene', done: scenes.length > 0 },
     { label: 'Shot', done: counts.shots > 0 },
     { label: 'Sequence', done: counts.total > 0 },
-    { label: 'GLM Prompt', done: (state?.queue || []).some((item) => Boolean(promptFor(workflow, item))) },
+    { label: 'Agent Prompt', done: (state?.queue || []).some((item) => Boolean(promptFor(workflow, item))) },
     { label: 'H3 视频', done: counts.completed > 0 },
     { label: '关系帧', done: (state?.queue || []).some((item) => Boolean(item.relationFrameOut)) },
   ];
@@ -619,7 +619,7 @@ export function H3AutoComicWorkbench() {
             <div className="h3aw-section-label">剧本原文</div>
             <p>{storyText || '还没有读取到 H3 项目的剧本。'}</p>
           </div>
-          <div className="h3aw-isolation-note"><span>H3 ONLY</span><p>此处只读写当前 H3 独立项目档案，可单独部署运行。</p></div>
+          <div className="h3aw-isolation-note"><span>PUBLIC H3 ONLY</span><p>独立开源版只读写当前 H3 项目档案；不会读取娜娜私有导演台。</p></div>
         </aside>
 
         <section className="h3aw-content">
@@ -716,7 +716,7 @@ export function H3AutoComicWorkbench() {
                           <div className="h3aw-sequence-header-right">
                             <span className={`h3aw-item-status ${item.status}`}>{itemLabels[item.status]}</span>
                             <span className={`h3aw-workflow-badge ${activePreset}`}>{workflowPresetLabels[activePreset] || activePreset}</span>
-                            <span className="h3aw-engine-badge">GLM-5.3 → H3</span>
+                            <span className="h3aw-engine-badge">Agent → H3</span>
                             <label className="h3aw-workflow-control" onClick={(event) => event.stopPropagation()}>
                               <span>工作流</span>
                               <select
@@ -758,8 +758,8 @@ export function H3AutoComicWorkbench() {
                           </div>
 
                           <div className="h3aw-sequence-review">
-                            <div className="h3aw-prompt-head"><div><strong>GLM-5.3 SEQUENCE PROMPT</strong><span>GLM 返回的执行提示词 · 只读审阅</span></div><button type="button" onClick={(event) => { event.stopPropagation(); void copyPrompt(item); }} disabled={!prompt}>{copiedSequenceId === item.sequenceId ? '已复制' : '复制 Prompt'}</button></div>
-                            <textarea className="h3aw-prompt" value={prompt} readOnly spellCheck={false} aria-label={`${item.sequenceId} GLM-5.3 Prompt`} />
+                            <div className="h3aw-prompt-head"><div><strong>AGENT SEQUENCE PROMPT</strong><span>Agent 回填的 H3 执行提示词 · 只读审阅</span></div><button type="button" onClick={(event) => { event.stopPropagation(); void copyPrompt(item); }} disabled={!prompt}>{copiedSequenceId === item.sequenceId ? '已复制' : '复制 Prompt'}</button></div>
+                            <textarea className="h3aw-prompt" value={prompt} readOnly spellCheck={false} aria-label={`${item.sequenceId} Agent H3 Prompt`} />
                             <div className="h3aw-continuity-head"><strong>CONTINUITY / 空间关系接力</strong><span>{item.relationFrameIn ? '承接上一条成品关系帧' : '本 Scene 从正式资产起链'}</span></div>
                             <div className="h3aw-frame-grid">
                               <div className="h3aw-frame-tile">

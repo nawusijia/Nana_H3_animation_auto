@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { H3AutoComicWorkbench } from './H3AutoComicWorkbench';
+import { IntegrationSettings } from './IntegrationSettings';
 import './app.css';
 
 type H3Project = { id: string; name: string; path?: string; isActive?: boolean };
@@ -63,7 +64,7 @@ export default function App() {
   const [newProjectName, setNewProjectName] = useState('');
   const [sourceText, setSourceText] = useState('');
   const [isOtome, setIsOtome] = useState(false);
-  const [tab, setTab] = useState<'planner' | 'execute'>('planner');
+  const [tab, setTab] = useState<'planner' | 'execute' | 'settings'>('planner');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
@@ -222,10 +223,11 @@ export default function App() {
         <div className="nana-h3-tabs">
           <button className={tab === 'planner' ? 'active' : ''} onClick={() => setTab('planner')}>01 Agent 导演</button>
           <button className={tab === 'execute' ? 'active' : ''} onClick={() => setTab('execute')} disabled={!activeProject}>02 自动执行 / 审片</button>
+          <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>03 配置中心</button>
         </div>
       </div>
 
-      {tab === 'planner' ? (
+      {tab === 'settings' ? <IntegrationSettings /> : tab === 'planner' ? (
         <main className="nana-h3-planner">
           <section className="nana-h3-planner-card intro">
             <div>

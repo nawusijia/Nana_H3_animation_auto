@@ -85,7 +85,7 @@ MiniMax H3 / ComfyUI 在这里是 **执行引擎**，不负责导演决策。
 - 资产参考图设计信息与构成规划
 - 直接上传 / 替换人物、场景、道具参考图
 - 资产门禁：缺参考图时禁止误提交 H3
-- 三档 H3 工作流：极速文戏 / 动态增强 / 极致精修 1080P
+- 四档 H3 工作流：极速预览 480P / 极速高清 / 均衡高清 / 战斗动态
 - 每条 Sequence 可自动导演选档，也可手动覆盖
 - 同 Scene 严格串行生成
 - 上一条成片自动截空间关系帧，下一条以 Ref2VA 参考方式续接
@@ -305,37 +305,9 @@ NANA_H3_AGENT_ONLY=false
 
 当前主要模型文件名：
 
-### 极速文戏 `standard`
+公开发行版当前提供四档：`preview_480`（极速预览 480P）、`rapid_hd`（极速高清，正式默认）、`balanced_hd`（均衡高清）与 `combat_dynamic`（战斗动态）。三条正式 T8 模板已脱敏后放在 `workflows/`；模板不会携带 Nana 的测试素材、机器路径或项目资产。
 
-```text
-minimax_h3_fl2va_int8_convrot.safetensors
-minimax_h3_fl2v_turbo_4step_v0.1_comfyui_alpha8-T8-convert.safetensors
-qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
-minimax_h3_video_vae_fp16.safetensors
-minimax_h3_audio_vae_fp32.safetensors
-```
-
-### 动态增强 `best_dynamic`
-
-```text
-DasiwaMinimaxH3_dasiwaREF2VAHybridV1.safetensors
-minimax_h3_turbo_4步加速_DasiwaREF2VAHybridV1_curveproj1025_compat_v001-T8.safetensors
-qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
-minimax_h3_video_vae_fp16.safetensors
-minimax_h3_audio_vae_fp32.safetensors
-```
-
-### 极致精修 `ultra_refine`
-
-```text
-minimax_h3_fl2va_pruned_int8_convrot.safetensors
-minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors
-qwen3vl_32b_minimax_h3_int8_convrot.safetensors
-minimax_h3_video_vae_fp16.safetensors
-minimax_h3_audio_vae_fp32.safetensors
-```
-
-如果你的模型文件名不同，可以修改 `server.mjs` 中对应工作流的 loader 文件名。
+不同 H3 / T8 节点包使用的模型文件名可能不同。若你的本地模型命名与模板不一致，请在 `workflows/*.api.json` 中调整对应 loader；不要把个人绝对路径写回仓库。
 
 常见自定义节点包括：
 
@@ -354,29 +326,21 @@ VHS_VideoCombine
 
 ## H3 工作流档位
 
-### 极速文戏
+### 极速预览 480P `preview_480`
 
-适合普通对白、低动态、人物脸部占比较大的镜头。
+用于 Prompt / 导演逻辑快速验证，不参与自动正式选档。
 
-自由岛支持：
+### 极速高清 `rapid_hd`
 
-```text
-0.5 MP
-0.7 MP
-0.9 MP（默认）
-1.0 MP
-1.1 MP（实验）
-```
+正式生产默认档，优先平衡速度与画质。
 
-### 动态增强
+### 均衡高清 `balanced_hd`
 
-适合战斗、粒子、火焰、能量、烟尘、水花与复杂多部件运动。
+适合小脸景别、复杂粒子 / 火焰 / 能量 / 机械多部件等需要更稳妥细节的镜头。
 
-### 极致精修 1080P
+### 战斗动态 `combat_dynamic`
 
-用于人物大全景 / 全景 / 中远景、大中景等“小脸景别”或门面镜头，优先保证脸部清晰度。
-
-自动路由仍可以根据镜头与 Prompt 选择档位，也可以手动覆盖。
+只针对近身格斗、兵刃交锋与强身体动作。自动路由优先识别战斗，其次识别复杂特效 / 小脸景别，其余正式生产使用极速高清；每条 Sequence 仍可手动覆盖。
 
 ---
 
@@ -477,3 +441,23 @@ MiniMax H3 模型、ComfyUI、自定义节点和其他第三方模型 / 组件�
 ---
 
 Made by 娜乌斯嘉 / Nana with her AI collaborators.
+
+
+## Public integration layer (Agent / API / CLI)
+
+This standalone edition exposes a provider-neutral integration surface without depending on Nana's private Director Console.
+
+- Director mode: `NANA_DIRECTOR_MODE=agent|api`. Agent is the default; API mode is an explicit opt-in.
+- Image generation: `NANA_IMAGE_MODE=none|cli|api`.
+- Video generation: `NANA_VIDEO_MODE=h3|cli|api`.
+- Duration capability: `NANA_VIDEO_DURATION_MAX=15|30`. MiniMax H3 remains capped at 15 seconds; 30 seconds is available only to external CLI/API video providers that support it.
+- Capability discovery: `GET /api/integrations/capabilities`.
+- Runtime mode switch (non-secret choices): `PUT /api/integrations/config` with `directorMode`, `imageMode`, `videoMode`, and/or `maxSequenceSeconds: 15|30`. Runtime switches reset on server restart; use `.env` for persistent defaults.
+- Direct director API bridge: `POST /api/integrations/director/chat` (OpenAI-compatible; active only in API mode).
+- H3 preset catalog: `GET /api/h3/workflow-presets`.
+- Generic image adapter: `POST /api/integrations/image/generate`.
+- Generic video adapter: `POST /api/integrations/video/generate`.
+
+CLI adapters receive the request JSON in `NANA_ADAPTER_PAYLOAD`. HTTP adapters receive a JSON POST and can use a Bearer token configured with the matching `*_API_KEY`.
+
+The packaged H3 catalog contains four public tiers: **极速预览 480P**, **极速高清**, **均衡高清**, and **战斗动态**. Historical `standard / best_dynamic / ultra_refine` values are accepted only as migration aliases and are not presented as new presets.

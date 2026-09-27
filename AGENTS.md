@@ -160,7 +160,7 @@ Assemble approved Shots into H3 execution windows.
 
 Every Sequence:
 
-- is an integer `5–15s`;
+- follows the active video engine capability: MiniMax H3 is integer `5–15s`; external CLI/API video providers may expose up to `30s` when `NANA_VIDEO_DURATION_MAX=30`;
 - stays inside one Scene;
 - preserves Shot order;
 - contains every approved Shot exactly once across the project;
@@ -316,7 +316,9 @@ If a repair is required, change only the failing scope and preserve everything n
 - Keep README and `.env.example` aligned with the default Agent-owned mode.
 - The public app must boot without any model API key.
 - Never commit `.env`, runtime `data/`, user assets, generated videos, relation frames, logs, or machine-specific configuration.
-- Keep direct-provider code behind explicit legacy opt-in; do not make it the default UX.
+- Keep Agent mode as the default UX. Public deployments may explicitly choose `NANA_DIRECTOR_MODE=api` for direct-provider planning.
+- Image generation is pluggable through `NANA_IMAGE_MODE=cli|api`; video execution is pluggable through `NANA_VIDEO_MODE=h3|cli|api`.
+- The 15s/30s switch is an engine capability, not a universal H3 override: H3 remains capped at 15s.
 - Before shipping code changes run:
 
 ```bash

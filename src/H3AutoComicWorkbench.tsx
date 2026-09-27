@@ -22,7 +22,7 @@ interface QueueItem {
   assetPaths: string[];
   assetBindings?: Array<{ assetId: string; path: string }>;
   prompt: string;
-  workflowPreset?: 'standard' | 'best_dynamic' | 'ultra_refine' | string;
+  workflowPreset?: 'preview_480' | 'rapid_hd' | 'balanced_hd' | 'combat_dynamic' | string;
   workflowPresetVersion?: string;
   workflowPresetSource?: 'auto' | 'manual' | string;
   routeReason?: string;
@@ -161,11 +161,15 @@ const assetKindLabels: Record<string, string> = {
 };
 
 const workflowPresetLabels: Record<string, string> = {
-  standard: '极速文戏',
-  best_dynamic: '动态增强·中档',
-  ultra_refine: '极致精修 1080P',
-  best_dynamic_short: '动态增强·中档',
-  best_dynamic_long: '动态增强·中档',
+  preview_480: '极速预览 480P',
+  rapid_hd: '极速高清',
+  balanced_hd: '均衡高清',
+  combat_dynamic: '战斗动态',
+  standard: '极速高清',
+  best_dynamic: '均衡高清',
+  ultra_refine: '均衡高清',
+  best_dynamic_short: '均衡高清',
+  best_dynamic_long: '均衡高清',
 };
 
 function readError(payload: any, fallback: string) {
@@ -191,8 +195,9 @@ function promptFor(workflow: H3Workflow | null, item: QueueItem) {
 }
 
 function normalizedWorkflowPreset(value?: string) {
-  if (value === 'best_dynamic_short' || value === 'best_dynamic_long') return 'best_dynamic';
-  return value || 'standard';
+  if (value === 'standard') return 'rapid_hd';
+  if (value === 'best_dynamic' || value === 'best_dynamic_short' || value === 'best_dynamic_long' || value === 'ultra_refine') return 'balanced_hd';
+  return value || 'rapid_hd';
 }
 
 export function H3AutoComicWorkbench() {
@@ -726,9 +731,10 @@ export function H3AutoComicWorkbench() {
                                 aria-label={`${item.sequenceId} H3 工作流档位`}
                               >
                                 <option value="auto">自动导演</option>
-                                <option value="standard">极速文戏</option>
-                                <option value="best_dynamic">动态增强·中档</option>
-                                <option value="ultra_refine">极致精修 1080P</option>
+                                <option value="preview_480">极速预览 480P</option>
+                                <option value="rapid_hd">极速高清</option>
+                                <option value="balanced_hd">均衡高清</option>
+                                <option value="combat_dynamic">战斗动态</option>
                               </select>
                             </label>
                             <small className="h3aw-route-reason" title={item.routeReason || ''}>{savingPreset ? '切换中…' : item.routeReason || (item.workflowPresetSource === 'manual' ? '手动指定' : '自动判断')}</small>

@@ -1,0 +1,541 @@
+{
+  "30": {
+    "class_type": "ComfyMathExpression",
+    "inputs": {
+      "values.a": [
+        "27",
+        0
+      ],
+      "expression": "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17"
+    },
+    "_meta": {
+      "title": "ComfyMathExpression"
+    }
+  },
+  "1": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    },
+    "_meta": {
+      "title": "H3 video VAE"
+    }
+  },
+  "17": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "16",
+        0
+      ],
+      "conditioning": [
+        "15",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "HIGH guider"
+    }
+  },
+  "27": {
+    "class_type": "PrimitiveFloat",
+    "inputs": {
+      "value": 15.0
+    },
+    "_meta": {
+      "title": "Float (duration)"
+    }
+  },
+  "15": {
+    "class_type": "MiniMaxH3TwoPassLatentReconcileT8Advanced",
+    "inputs": {
+      "learned_latent": [
+        "13",
+        0
+      ],
+      "highres_template": [
+        "14",
+        1
+      ],
+      "positive": [
+        "14",
+        0
+      ],
+      "audio_policy": "auto",
+      "second_pass_audio_source": "legacy_policy",
+      "second_pass_audio_strength": 0
+    },
+    "_meta": {
+      "title": "Validate and reconcile HIGH contract"
+    }
+  },
+  "2": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    },
+    "_meta": {
+      "title": "H3 audio VAE"
+    }
+  },
+  "3": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "H3 CLIP"
+    }
+  },
+  "19": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "11",
+        0
+      ],
+      "guider": [
+        "17",
+        0
+      ],
+      "sampler": [
+        "16",
+        1
+      ],
+      "sigmas": [
+        "16",
+        2
+      ],
+      "latent_image": [
+        "15",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "PASS 2 · decode output, not denoised_output"
+    }
+  },
+  "20": {
+    "class_type": "MiniMaxH3AVDecodeT8",
+    "inputs": {
+      "av_latent": [
+        "19",
+        0
+      ],
+      "video_vae": [
+        "1",
+        0
+      ],
+      "audio_vae": [
+        "2",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Decode HIGH AV"
+    }
+  },
+  "21": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "images": [
+        "20",
+        0
+      ],
+      "audio": [
+        "20",
+        1
+      ],
+      "frame_rate": 24.0,
+      "loop_count": 0,
+      "filename_prefix": "MiniMaxH3/nana_public_job",
+      "format": "video/h265-mp4",
+      "pingpong": false,
+      "save_output": true,
+      "no_preview": false,
+      "pix_fmt": "yuv420p10le",
+      "crf": 22,
+      "save_metadata": true
+    },
+    "_meta": {
+      "title": "Save synchronized MP4"
+    }
+  },
+  "29": {
+    "class_type": "ResolutionSelector",
+    "inputs": {
+      "aspect_ratio": "16:9 (Widescreen)",
+      "megapixels": 0.7000000000000001,
+      "multiple": 32
+    },
+    "_meta": {
+      "title": "ResolutionSelector"
+    }
+  },
+  "28": {
+    "class_type": "CR Prompt Text",
+    "inputs": {
+      "prompt": "生成时长15秒，整段Sequence一次生成，电影级写实科幻CG，高动态火魔法展示。人物保持参考图中的身份、服装、发型和面部特征；场景保持未来工业机库的金属结构、冷色顶灯和空间尺度。核心视觉是橙红到金白色的真实体积火焰、翻卷火舌、热浪折射、飞散火星、余烬和火光反射，火焰必须具有连续流体运动和清晰的能量传播路径。\n\nshot1（0s-5s）：中景缓慢推进。凯恩站在机库中央偏左，抬起右手，掌心先出现一点高亮金红火种，火种迅速旋转膨胀成拳头大小的火焰核心。火焰沿手腕和前臂形成短暂螺旋火带，火星向上飘散，面部、衣料和附近金属地面被暖色火光动态照亮。随后他向前甩臂，火焰核心被拉成长条火流，向画面右前方高速射出。\n\nshot2（5s-10s）：镜头跟随火流向右前方横移。火流在半空突然展开成一道弧形火墙，火墙由连续翻卷的火舌构成，边缘不断有细小火星和余烬剥离。火墙向前推进时，地面产生快速移动的暖色反射和热浪折射；中段一次明显的火焰冲击脉冲从中心向两侧扩散，形成短暂环形火焰冲击波，随后火墙继续稳定燃烧。\n\nshot3（10s-15s）：镜头略微拉远并回到凯恩。凯恩握拳收臂，远处火墙从两侧向中心快速回卷，重新聚合成一条旋转火龙卷般的火流，沿原路径高速返回，在凯恩掌前压缩成明亮火球。火球表面翻卷数次后迅速缩小熄灭，只留下少量余烬缓慢上升，机库重新恢复冷色照明。声音以火焰燃烧、爆燃脉冲、能量低鸣、脚步和衣料摩擦为主。"
+    },
+    "_meta": {
+      "title": "CR Prompt Text"
+    }
+  },
+  "4": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "DasiwaMinimaxH3_dasiwaREF2VAHybridV1_0.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "H3 FL2VA"
+    }
+  },
+  "5": {
+    "class_type": "LoraLoaderBypassModelOnly",
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "lora_name": "minimax_h3_turbo_v4_step600_ema_DasiwaREF2VAHybridV1_0_curveproj1025_compat_v001.safetensors",
+      "strength_model": 1
+    },
+    "_meta": {
+      "title": "LightX2V FL2V Turbo · corrected alpha8 · quantized-model bypass"
+    }
+  },
+  "8": {
+    "class_type": "MiniMaxH3DualClockSamplerT8",
+    "inputs": {
+      "model": [
+        "45",
+        0
+      ],
+      "av_latent": [
+        "7",
+        1
+      ],
+      "steps": 8,
+      "shift_video": 12,
+      "shift_audio": 3,
+      "sampler_name": "dual_clock_euler",
+      "scheduler": "native_flow"
+    },
+    "_meta": {
+      "title": "LOW upstream I2V sampler contract · shift 12/3"
+    }
+  },
+  "9": {
+    "class_type": "MiniMaxH3LearnedTwoPassParityPlanT8Advanced",
+    "inputs": {
+      "model": [
+        "8",
+        0
+      ],
+      "base_steps": 9,
+      "coarse_steps": 4,
+      "refine_steps": 5
+    },
+    "_meta": {
+      "title": "Published LBH schedule · simple8 split4 + refine3"
+    }
+  },
+  "12": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "11",
+        0
+      ],
+      "guider": [
+        "10",
+        0
+      ],
+      "sampler": [
+        "8",
+        1
+      ],
+      "sigmas": [
+        "9",
+        0
+      ],
+      "latent_image": [
+        "7",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "PASS 1 - consume denoised_output"
+    }
+  },
+  "7": {
+    "class_type": "MiniMaxH3AudioConditioningT8",
+    "inputs": {
+      "clip": [
+        "3",
+        0
+      ],
+      "video_vae": [
+        "1",
+        0
+      ],
+      "audio_vae": [
+        "2",
+        0
+      ],
+      "prompt": [
+        "28",
+        0
+      ],
+      "width": [
+        "29",
+        0
+      ],
+      "height": [
+        "29",
+        1
+      ],
+      "length": [
+        "30",
+        1
+      ],
+      "task_type": "Ref2VA",
+      "audio_mode": "native",
+      "audio_denoise_strength": 1,
+      "add_source_as_reference": false,
+      "prompt_primary_audio_ordinal": 0,
+      "strict_prompt_tags": true,
+      "ref_image_size": "match",
+      "reference_video_policy": "official_2_to_15s",
+      "allow_above_reference_area": false
+    },
+    "_meta": {
+      "title": "LOW Conditioning 736x416"
+    }
+  },
+  "33": {
+    "class_type": "ModelAttentionBackend",
+    "inputs": {
+      "model": [
+        "32",
+        0
+      ],
+      "attention": "pytorch attention"
+    },
+    "_meta": {
+      "title": "ModelAttentionBackend"
+    }
+  },
+  "32": {
+    "class_type": "MiniMaxH3MemoryEfficientSageAttentionPatch",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "MiniMaxH3MemoryEfficientSageAttentionPatch"
+    }
+  },
+  "34": {
+    "class_type": "SolAttnMiniMax",
+    "inputs": {
+      "model": [
+        "33",
+        0
+      ],
+      "tau": 1.3,
+      "start_percent": 0.2,
+      "end_percent": 0.9,
+      "min_tokens": 12288,
+      "sink_conditioning": "exact_kv_and_rows",
+      "morton": false,
+      "morton_curve": "2d_frame",
+      "centroid_tail": true,
+      "routed_cap_percent": 0,
+      "reuse_qkv_memory": false,
+      "verbose": false,
+      "dense_blocks": ""
+    },
+    "_meta": {
+      "title": "SolAttnMiniMax"
+    }
+  },
+  "44": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "34",
+        0
+      ],
+      "lora_name": "H3_Combat_V2.safetensors",
+      "strength_model": 0.9000000000000001
+    },
+    "_meta": {
+      "title": "LoraLoaderModelOnly"
+    }
+  },
+  "45": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "44",
+        0
+      ],
+      "lora_name": "Motion_Repair.safetensors",
+      "strength_model": 0.7000000000000002
+    },
+    "_meta": {
+      "title": "LoraLoaderModelOnly"
+    }
+  },
+  "46": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "44",
+        0
+      ],
+      "lora_name": "Motion_Repair.safetensors",
+      "strength_model": 0.20000000000000004
+    },
+    "_meta": {
+      "title": "LoraLoaderModelOnly"
+    }
+  },
+  "10": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "8",
+        0
+      ],
+      "conditioning": [
+        "7",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "LOW guider"
+    }
+  },
+  "14": {
+    "class_type": "MiniMaxH3AudioConditioningT8",
+    "inputs": {
+      "clip": [
+        "3",
+        0
+      ],
+      "video_vae": [
+        "1",
+        0
+      ],
+      "audio_vae": [
+        "2",
+        0
+      ],
+      "prompt": [
+        "28",
+        0
+      ],
+      "width": [
+        "13",
+        1
+      ],
+      "height": [
+        "13",
+        2
+      ],
+      "length": [
+        "30",
+        1
+      ],
+      "task_type": "Ref2VA",
+      "audio_mode": "native",
+      "audio_denoise_strength": 1,
+      "add_source_as_reference": false,
+      "prompt_primary_audio_ordinal": 0,
+      "strict_prompt_tags": true,
+      "ref_image_size": "match",
+      "reference_video_policy": "official_2_to_15s",
+      "allow_above_reference_area": false
+    },
+    "_meta": {
+      "title": "HIGH Conditioning · width/height auto-linked from upscaler"
+    }
+  },
+  "11": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 123456789
+    },
+    "_meta": {
+      "title": "LOW noise"
+    }
+  },
+  "13": {
+    "class_type": "MiniMaxH3LearnedLatentUpscaleT8Advanced",
+    "inputs": {
+      "av_latent": [
+        "12",
+        1
+      ],
+      "model_name": "minimax_h3_latent_upscaler_3d_fp16.safetensors",
+      "size_mode": "scale_by",
+      "scale_by": 1.5000000000000002,
+      "target_megapixels": 1,
+      "target_width": 1280,
+      "target_height": 704,
+      "aspect_policy": "preserve_source",
+      "max_anisotropy": 1.05,
+      "precision": "fp16",
+      "release_policy": "offload_after"
+    },
+    "_meta": {
+      "title": "Upstream-default learned 3D latent upscale · 2x"
+    }
+  },
+  "16": {
+    "class_type": "MiniMaxH3TwoPassDetailMixerT8Advanced",
+    "inputs": {
+      "model": [
+        "46",
+        0
+      ],
+      "av_latent": [
+        "15",
+        0
+      ],
+      "refine_sigmas": [
+        "9",
+        1
+      ],
+      "shift_video": 12,
+      "shift_audio": 3,
+      "enable_tail": false,
+      "extra_tail_steps": 1,
+      "tail_spacing": "video_sigma_linear",
+      "enable_model_time_bias": false,
+      "bias": -0.025,
+      "bias_start_progress": 0.7,
+      "bias_end_progress": 0.95,
+      "bias_domain": "video_sigma",
+      "enable_stg": false,
+      "stg_scale": 0.35,
+      "stg_double_blocks": "25",
+      "stg_start_progress": 0.25,
+      "stg_end_progress": 0.85,
+      "enable_restart": false,
+      "restart_video_sigma": 0.15,
+      "restart_steps": 3,
+      "restart_seed": 1062155148700644
+    },
+    "_meta": {
+      "title": "HIGH upstream refine · optional Tail/Bias/STG/Restart off by default"
+    }
+  }
+}

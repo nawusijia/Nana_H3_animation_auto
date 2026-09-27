@@ -498,8 +498,7 @@ function buildWorkflowWorkspace(runtime, input) {
     const sequenceShots = shots.filter(shot => sequenceShotIds.has(shot.id) || String(shot.sequenceIds[0]) === String(sequence.id));
     return {
       id: String(sequence.id || `workflow-sequence-${index + 1}`),
-
-[3844 more lines in file. Use offset=501 to continue.]      sceneId: String(sequence.sceneId || scenes[index]?.id || scenes[0]?.id || `workflow-scene-1`),
+      sceneId: String(sequence.sceneId || scenes[index]?.id || scenes[0]?.id || `workflow-scene-1`),
       order: Number.isFinite(Number(sequence.order)) ? Number(sequence.order) : index,
       shotIds: Array.isArray(sequence.shotIds) && sequence.shotIds.length ? sequence.shotIds.map(String) : sequenceShots.map(shot => shot.id),
       durationSeconds: Number.isFinite(Number(sequence.durationSeconds))
@@ -999,8 +998,7 @@ async function submitAutoSequence(runtime, sequenceItem, relationFramePath) {
     workflow_preset: normalizeH3WorkflowPreset(sequenceItem.workflowPreset || H3_DEFAULT_FORMAL_PRESET),
     workflow_preset_version: sequenceItem.workflowPresetVersion || H3_WORKFLOW_PRESETS.standard.version,
     workflow_preset_source: sequenceItem.workflowPresetSource || 'legacy',
-
-[3344 more lines in file. Use offset=1001 to continue.]    route_reason: sequenceItem.routeReason || '',
+    route_reason: sequenceItem.routeReason || '',
     progress_phase: 'queued',
     progress_percent: 0,
     progress_label: '等待H3 GPU 开始',
@@ -1500,8 +1498,7 @@ function buildBestDynamicWorkflow({ prompt, aspectRatio, seconds, imageNames, fi
         steps: 8,
         shift_video: 12.0,
         shift_audio: 3.0,
-
-[2844 more lines in file. Use offset=1501 to continue.]        sampler_name: 'dual_clock_euler',
+        sampler_name: 'dual_clock_euler',
         scheduler: 'native_flow',
       },
       class_type: 'MiniMaxH3DualClockSamplerT8',
@@ -2001,8 +1998,7 @@ const H3_NODE_PROGRESS = {
     '18': [51, '极致精修 · 2MP Latent Upscale', 'upscaling'],
     '19': [76, '合并高分辨率 Latent', 'conditioning_high'],
     '20': [77, '建立 1080P 引导条件', 'conditioning_high'],
-
-[2344 more lines in file. Use offset=2001 to continue.]    '21': [78, '准备 1080P 二采 Sigmas', 'conditioning_high'],
+    '21': [78, '准备 1080P 二采 Sigmas', 'conditioning_high'],
     '22': [80, '极致精修 · 1080P 二采', 'sampling_second'],
     '23': [95, '解码 1080P 视频与音频', 'decoding'],
     '24': [97, '封装 H265 成品', 'encoding'],
@@ -2502,8 +2498,7 @@ function sanitizeSequenceTransitionText(text) {
 }
 
 function sanitizeSequenceResult(result) {
-
-[1844 more lines in file. Use offset=2501 to continue.]  const directorRead = { ...(result?.directorRead || {}) };
+  const directorRead = { ...(result?.directorRead || {}) };
   for (const field of DIRECTOR_READ_FIELDS) {
     directorRead[field] = sanitizeSequenceTransitionText(directorRead[field]);
     if (!directorRead[field]) directorRead[field] = '围绕本段唯一的可见动作推进叙事。';
@@ -3003,8 +2998,7 @@ function normalizeH3CutPlan(rawText, cuts, settings, scene) {
     const newlineOffset = rawText.indexOf('\n', requestedEndOffset - 1);
     const endOffset = index === rawCuts.length - 1
       ? rawText.length
-
-[1344 more lines in file. Use offset=3001 to continue.]      : (newlineOffset >= 0 ? newlineOffset + 1 : rawText.length);
+      : (newlineOffset >= 0 ? newlineOffset + 1 : rawText.length);
     if (!Number.isInteger(endOffset) || endOffset <= cursor || endOffset > rawText.length) continue;
     const sourceChunk = rawText.slice(cursor, endOffset);
     const sourceSpeech = extractSourceSpeech(sourceChunk, sourceCharacters.map(item => item.name));
@@ -3504,8 +3498,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/workflow/analyze-outline') {
-
-[844 more lines in file. Use offset=3501 to continue.]    if (h3AgentOnlyModeEnabled()) throw Object.assign(new Error('当前为 Agent 接管模式：网页不再调用 GLM API。请读取 /api/agent/bootstrap，由本地 Agent 完成 outline 阶段。'), { status: 423 });
+    if (h3AgentOnlyModeEnabled()) throw Object.assign(new Error('当前为 Agent 接管模式：网页不再调用 GLM API。请读取 /api/agent/bootstrap，由本地 Agent 完成 outline 阶段。'), { status: 423 });
     const body = await parseJsonBody(req);
     const sourceText = String(body.sourceText || '').trim();
     if (!sourceText) throw Object.assign(new Error('请先输入 H3 剧本。'), { status: 400 });
@@ -4005,8 +3998,7 @@ async function handleApi(req, res, url) {
     if (!plan.queue.length || plan.plan.rejections.length) throw Object.assign(new Error('H3 规划存在阻断项，不能开始自动生成。'), { status: 409 });
     // “开始生成”本身就是 GPU 使用意图：先完成 H3 唤醒/互斥切换，
     // 成功后再把自动队列标记为 running，避免待机状态被误判为执行端故障。
-
-[344 more lines in file. Use offset=4001 to continue.]    await ensureH3Gpu();
+    await ensureH3Gpu();
     plan.status = 'running';
     plan.stopRequested = false;
     plan.lastError = '';

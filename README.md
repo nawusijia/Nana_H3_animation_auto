@@ -299,6 +299,117 @@ NANA_H3_AGENT_ONLY=false
 
 ---
 
+## MiniMax H3 本地部署参考（请先读）
+
+> **重要：下面是 Nana 当前公开工作流的“已验证参考环境”，不是所有电脑都必须照抄的唯一配置，也不是最低硬件要求。**
+>
+> H3 对显存、内存、CUDA / PyTorch、ComfyUI 版本、量化方式和工作流分辨率都比较敏感。不同显卡不应该机械照搬 Nana 的参数。**更推荐把本仓库交给你自己的本地 Agent，让 Agent 先检查你的 GPU / 显存 / 内存 / ComfyUI / 已有模型，再为你的电脑制定安装与降档方案。**
+
+### 基础软件
+
+Nana 当前使用 Windows + NVIDIA GPU + ComfyUI 的本地方案。建议准备 Windows 10/11、NVIDIA GPU 与正常驱动/CUDA 环境、ComfyUI、Git、Node.js 22+、npm 10+，以及一个能检查本机环境的 coding Agent。
+
+**显卡型号、最低显存和推荐系统内存这里不写死。** 量化、分辨率、帧数、attention backend、offload 与工作流档位都会显著改变资源占用，请以自己的机器实测为准。
+
+### 当前公开工作流实际使用的节点
+
+三条正式模板位于 `workflows/`。当前 H3/T8 专用节点包括：
+
+```text
+MiniMaxH3AudioConditioningT8
+MiniMaxH3DualClockSamplerT8
+MiniMaxH3AVDecodeT8
+MiniMaxH3TwoPassLatentReconcileT8Advanced
+MiniMaxH3TwoPassDetailMixerT8Advanced
+MiniMaxH3LearnedTwoPassParityPlanT8Advanced
+MiniMaxH3LearnedLatentUpscaleT8Advanced
+MiniMaxH3MemoryEfficientSageAttentionPatch
+ModelAttentionBackend
+SolAttnMiniMax
+```
+
+此外还使用 `VHS_VideoCombine`（常见 Video Helper Suite / VHS 扩展）、`ComfyMathExpression`、`ResolutionSelector`、`CR Prompt Text`，以及 ComfyUI 常见的 Loader / Sampler / Guider 节点。
+
+**不要只按文字清单盲装。** 最可靠的方法是把 `workflows/*.api.json` 导入自己的 ComfyUI，让 ComfyUI / Manager 标出缺失的 `class_type`，再让本地 Agent 核对对应扩展和版本。
+
+### 当前公开工作流引用的模型
+
+下面是**当前正式模板实际引用到的文件名**，仅代表 Nana 当前已验证工作流的参考组合，不代表你的机器必须使用完全相同的量化或版本。
+
+H3 / 文本编码 / VAE / 放大：
+
+```text
+qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
+minimax_h3_video_vae_fp16.safetensors
+minimax_h3_audio_vae_fp32.safetensors
+minimax_h3_latent_upscaler_3d_fp16.safetensors
+```
+
+H3 主模型 / T8 相关模型：
+
+```text
+minimax_h3_hybrid_fl2va_ref2va_b25-49-int8_r.safetensors
+DasiwaMinimaxH3_dasiwaREF2VAHybridV1_0.safetensors
+minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors
+```
+
+当前模板引用的 LoRA / 加速 / 动态相关权重：
+
+```text
+Motion_Repair.safetensors
+minimax_h3_turbo_v4_step600_ema_DasiwaREF2VAHybridV1_0_curveproj1025_compat_v001.safetensors
+H3_Combat_V2.safetensors
+minimax_h3_turbo_4step_10ErosMax_test4_pruned_curveproj1025_exp_v001-T8.safetensors
+minimax_h3_lms_v1.0_r64.safetensors
+```
+
+部分模板还引用一个中文命名的电影质感 LoRA。不同压缩包 / 系统编码下文件名可能显示不同，**请直接以下载到的 `workflows/*.api.json` 中 `lora_name` 的实际值为准**。模型应放在哪个 ComfyUI 子目录，也请以对应 Loader 和你安装的 H3/T8 节点包说明为准。
+
+### 四档怎么选
+
+- `preview_480`：极速预览 480P，只用于快速验证 Prompt / 导演逻辑；
+- `rapid_hd`：极速高清，Nana 当前正式生产默认档；
+- `balanced_hd`：均衡高清，适合小脸、复杂特效或更稳妥的正式成片；
+- `combat_dynamic`：战斗动态，针对近身格斗、兵刃和强身体动作。
+
+显存 / 内存压力较大时，不要因为 Nana 使用某一档就强行跑同一档。先用 5 秒低档测试跑通链路，再逐步增加时长和质量。
+
+### 推荐：把下面这段直接发给你的本地 Agent
+
+```text
+请帮我部署 Nana_H3_animation_auto 的 MiniMax H3 本地生成环境。
+
+不要直接照抄作者电脑配置。先检查我的：
+1. GPU 型号与显存；
+2. 系统内存；
+3. NVIDIA 驱动 / CUDA / PyTorch 情况；
+4. ComfyUI 版本与现有 custom_nodes；
+5. 已下载的 H3 / Qwen3VL / VAE / LoRA 模型；
+6. 当前仓库 workflows/*.api.json 实际引用的 class_type 和模型文件名。
+
+然后：
+- 对照公开工作流列出我缺失的节点和模型；
+- 根据我的显存选择合适的量化、分辨率和工作流档位；
+- 优先保证能跑通 5 秒低档测试，不要一开始就追求最高画质；
+- 不要修改 Nana_H3_animation_auto 的公开工作流来掩盖缺失依赖；
+- 不要使用作者的本机路径、API Key 或私有配置；
+- 安装完成后先在 ComfyUI 单独跑通一条 H3，再连接导演台；
+- 最后告诉我：安装了什么、模型放在哪里、预计资源占用、推荐使用哪个档位，以及还有哪些风险。
+```
+
+### 最简单的排错顺序
+
+1. ComfyUI 本身能否正常启动；
+2. 导入 `workflows/*.api.json` 后是否显示缺失节点；
+3. Loader 是否找得到对应模型 / VAE / LoRA；
+4. 先在 ComfyUI 单独生成一条 5 秒测试；
+5. 确认 `NANA_H3_COMFY_URL` 指向正确的 ComfyUI；
+6. 最后再从导演台执行。
+
+这样可以把“ComfyUI/H3 环境问题”和“导演台问题”分开定位。
+
+---
+
 ## MiniMax H3 / ComfyUI 前置条件
 
 当前内置工作流来自 Nana 已验收的 MiniMax H3 T8 工作流栈。你的 ComfyUI 需要安装兼容的 H3 / T8 自定义节点，并能识别代码中使用的节点类型。
